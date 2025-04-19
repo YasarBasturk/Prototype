@@ -3,6 +3,12 @@ input/
 output/
 uploads/
 
+# Specific output file types
+output/*.jpg
+output/*.png
+output/*.json
+output/*.txt
+
 # Python cache files
 __pycache__/
 *.py[cod]
