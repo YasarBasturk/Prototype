@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Processing Pipeline</title>
+    <link rel="stylesheet" href="/Static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Image Processing Pipeline</h1>
+        </header>
+
+        <main>
+            <!-- Upload Section -->
+            <section class="upload-section">
+                <h2>Upload Image</h2>
+                <form id="uploadForm" class="upload-form">
+                    <div class="file-input">
+                        <input type="file" id="imageInput" accept=".jpg,.jpeg,.png" required>
+                        <label for="imageInput" class="file-label">Choose an image</label>
+                    </div>
+                    <button type="submit" class="submit-btn">Process Image</button>
+                </form>
+                <div id="uploadProgress" class="progress-bar" style="display: none;">
+                    <div class="progress"></div>
+                </div>
+            </section>
+
+            <!-- Results Section -->
+            <section id="resultsSection" class="results-section" style="display: none;">
+                <h2>Processing Results</h2>
+                <div class="image-comparison">
+                    <div class="original-image">
+                        <h3>Original Image</h3>
+                        <img id="originalImage" src="" alt="Original Image">
+                    </div>
+                    <div class="processed-image">
+                        <h3>Processed Image</h3>
+                        <img id="processedImage" src="" alt="Processed Image">
+                    </div>
+                </div>
+
+                <!-- Save Results Form -->
+                <div class="save-form">
+                    <h3>Save Results</h3>
+                    <input type="text" id="resultName" placeholder="Enter a name for these results" required>
+                    <button id="saveButton" class="save-btn">Save Results</button>
+                </div>
+
+                <!-- Editable Results -->
+                <div class="detected-elements">
+                    <h3>Detected Elements</h3>
+                    <div id="elementsContainer" class="elements-grid"></div>
+                </div>
+            </section>
+
+            <!-- Previous Results Section -->
+            <section class="previous-results">
+                <h2>Saved Results</h2>
+                <div id="savedResults" class="results-grid"></div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/Static/js/main.js"></script>
+</body>
+</html> 

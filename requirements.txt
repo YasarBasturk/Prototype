@@ -1,0 +1,8 @@
+flask==3.0.0
+Werkzeug==3.0.1
+numpy==1.24.3
+opencv-python==4.8.1
+paddleocr==2.7.0
+paddlex==2.1.0
+shapely==2.0.2
+pillow==10.0.1 
