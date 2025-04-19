@@ -1,5 +1,5 @@
 import os
-from image_preprocess import preprocess_image
+from Scripts.image_preprocess import preprocess_image
 
 def image_processing(image_path):
     """

@@ -6,8 +6,10 @@ import re
 
 def load_json_file(file_path):
     """Load JSON data from file"""
+    print(f"[DEBUG] Loading JSON file from: {file_path}")
     with open(file_path, 'r', encoding='utf-8') as f:
-        return json.load(f)
+        loaded_json = json.load(f)
+        return loaded_json
 
 def save_json_file(data, file_path):
     """Save JSON data to file"""
@@ -74,37 +76,58 @@ def should_split_text(text_item, cells):
 
 def extract_text_items(ocr_data):
     """Extract text items from the OCR JSON structure"""
-    # For PP-Structure output
-    if 'res' in ocr_data and isinstance(ocr_data['res'], list):
+    print(f"[DEBUG] Starting extract_text_items with input type: {type(ocr_data)}")
+    
+    # Handle the new structure where results are wrapped in a dict
+    if isinstance(ocr_data, dict) and 'results' in ocr_data:
+        print("[DEBUG] Found dictionary with 'results' key, extracting results")
+        ocr_data = ocr_data['results']
+    
+    # Handle list of results
+    if isinstance(ocr_data, list):
+        print(f"[DEBUG] Processing list of results, length: {len(ocr_data)}")
         text_items = []
-        for item in ocr_data['res']:
-            if item.get('type') == 'text':
-                # Extract text and confidence from the result
-                text = item.get('res', [])
-                if isinstance(text, list) and len(text) > 0:
-                    # Handle both single text and multiple text cases
-                    if isinstance(text[0], str):
-                        text_items.append({
-                            'text': text[0],
-                            'confidence': item.get('confidence', 0.0),
-                            'text_region': item.get('bbox', [])
-                        })
-                    elif isinstance(text[0], list):
-                        for t in text:
-                            if isinstance(t, list) and len(t) > 1:
-                                text_items.append({
-                                    'text': t[0],
-                                    'confidence': float(t[1]) if len(t) > 1 else 0.0,
-                                    'text_region': item.get('bbox', [])
-                                })
+        for idx, item in enumerate(ocr_data):
+            print(f"[DEBUG] Processing item {idx}")
+            if isinstance(item, dict):
+                print(f"[DEBUG] Item {idx} is a dictionary")
+                if item.get('type') == 'text':
+                    print(f"[DEBUG] Found text item at index {idx}")
+                    # Extract text and confidence from the result
+                    text = item.get('res', [])
+                    print(f"[DEBUG] Extracted text data: {text}")
+                    
+                    if isinstance(text, list) and len(text) > 0:
+                        print(f"[DEBUG] Processing text list of length: {len(text)}")
+                        # Handle both single text and multiple text cases
+                        if isinstance(text[0], str):
+                            print("[DEBUG] Processing single text string")
+                            text_items.append({
+                                'text': text[0],
+                                'confidence': item.get('confidence', 0.0),
+                                'text_region': item.get('bbox', [])
+                            })
+                        elif isinstance(text[0], list):
+                            print(f"[DEBUG] Processing list of text items, length: {len(text)}")
+                            for t_idx, t in enumerate(text):
+                                if isinstance(t, list) and len(t) > 1:
+                                    print(f"[DEBUG] Processing text subitem {t_idx}: {t}")
+                                    text_items.append({
+                                        'text': t[0],
+                                        'confidence': float(t[1]) if len(t) > 1 else 0.0,
+                                        'text_region': item.get('bbox', [])
+                                    })
+        
+        print(f"[DEBUG] Finished processing. Total text items extracted: {len(text_items)}")
         return text_items
     
     # For older formats (backward compatibility)
-    if 'res' in ocr_data and isinstance(ocr_data['res'], list):
-        for item in ocr_data['res']:
-            if isinstance(item, dict) and 'res' in item and isinstance(item['res'], list):
-                return item['res']
-        return ocr_data['res']
+    if isinstance(ocr_data, dict):
+        if 'res' in ocr_data and isinstance(ocr_data['res'], list):
+            for item in ocr_data['res']:
+                if isinstance(item, dict) and 'res' in item and isinstance(item['res'], list):
+                    return item['res']
+            return ocr_data['res']
     
     return ocr_data.get('text_regions', [])
 
@@ -421,7 +444,7 @@ def process_document(cell_json_path, ocr_json_path, output_dir="combined_results
     print(f"  Image path: {image_path}")
     
     # Get base name for output files
-    base_name = os.path.basename(cell_json_path).split('_')[0]
+    base_name = os.path.basename(cell_json_path).split('.')[0]
     
     # Load input JSON files
     try:

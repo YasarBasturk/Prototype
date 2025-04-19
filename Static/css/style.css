@@ -599,4 +599,37 @@ header {
     font-size: 0.85em;
     color: #6c757d;
     margin-bottom: 5px;
+}
+
+.visualization-legend {
+    margin-top: 10px;
+    font-size: 0.9em;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    justify-content: center;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.color-box {
+    width: 15px;
+    height: 15px;
+    border: 1px solid #ccc;
+}
+
+.color-box.green {
+    background-color: #00FF00;
+}
+
+.color-box.purple {
+    background-color: #800080;
+}
+
+.color-box.yellow {
+    background-color: #FFFF00;
 } 

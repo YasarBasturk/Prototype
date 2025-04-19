@@ -116,45 +116,6 @@ def dewarp_image(image, min_area_ratio=0.3):
     warped = cv2.warpPerspective(image, M, (maxWidth, maxHeight))
     return warped
 
-
-def debug_preprocessing(img_path, output_prefix="debug_step"):
-    """Debug function that outputs each preprocessing step as a separate image."""
-    import os
-    
-    # Create output directory if it doesn't exist
-    output_dir = "output/image-preprocessing"
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Load original
-    image = cv2.imread(img_path)
-    step_count = 1
-
-    # Step 0: Save the original to compare later
-    cv2.imwrite(f"{output_dir}/{output_prefix}_{step_count}_original.jpg", image)
-    step_count += 1
-
-    # Step 1: Deskew
-    #deskewed = deskew_image(image)
-    #cv2.imwrite(f"{output_dir}/{output_prefix}_{step_count}_deskewed.jpg", deskewed)
-    #step_count += 1
-
-    # Step 2: Dewarp
-    dewarped = dewarp_image(image, min_area_ratio=0.3)
-    cv2.imwrite(f"{output_dir}/{output_prefix}_{step_count}_dewarped.jpg", dewarped)
-    step_count += 1
-
-    # Step 3: CLAHE
-    clahe_result = clahe_enhance(dewarped)
-    cv2.imwrite(f"{output_dir}/{output_prefix}_{step_count}_clahe.jpg", clahe_result)
-    step_count += 1
-
-    # Step 4: Gamma correction
-    gamma_result = gamma_correction(clahe_result, gamma=1.2)
-    cv2.imwrite(f"{output_dir}/{output_prefix}_{step_count}_gamma.jpg", gamma_result)
-    step_count += 1
-
-    return gamma_result
-
 # Add new function for command-line usage without modifying existing code
 def preprocess_image(input_path, output_path):
     """Process an image through the full preprocessing pipeline and save the result."""
@@ -181,23 +142,3 @@ def preprocess_image(input_path, output_path):
     print(f"Processed image saved to {output_path}")
     
     return final_result
-
-# Only add this part to enable command-line arguments without affecting existing code
-if __name__ == "__main__":
-    # If arguments are provided, use them
-    if len(os.sys.argv) > 1:
-        # Parse command line arguments
-        parser = argparse.ArgumentParser(description='Preprocess an image for OCR.')
-        parser.add_argument('--input', type=str, help='Path to input image')
-        parser.add_argument('--output', type=str, help='Path to save processed image')
-        
-        args = parser.parse_args()
-        
-        # If both input and output are provided, run preprocessing
-        if args.input and args.output:
-            preprocess_image(args.input, args.output)
-        else:
-            print("Both --input and --output arguments are required.")
-    else:
-        # Original code - run debug preprocessing
-        final_image = debug_preprocessing("input/IMG_5063.png", output_prefix="my_debug")

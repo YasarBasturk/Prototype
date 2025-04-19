@@ -37,29 +37,15 @@
                         <img id="originalImage" src="" alt="Original Image">
                     </div>
                     <div class="processed-image">
-                        <h3>Processed Image</h3>
-                        <img id="processedImage" src="" alt="Processed Image">
+                        <h3>Analysis Visualization</h3>
+                        <img id="processedImage" src="" alt="Analysis Visualization">
+                        <p class="visualization-legend">
+                            <span class="legend-item"><span class="color-box green"></span> Regular Cells</span>
+                            <span class="legend-item"><span class="color-box purple"></span> Cells with Split Text</span>
+                            <span class="legend-item"><span class="color-box yellow"></span> Text Spanning Connection</span>
+                        </p>
                     </div>
                 </div>
-
-                <!-- Save Results Form -->
-                <div class="save-form">
-                    <h3>Save Results</h3>
-                    <input type="text" id="resultName" placeholder="Enter a name for these results" required>
-                    <button id="saveButton" class="save-btn">Save Results</button>
-                </div>
-
-                <!-- Editable Results -->
-                <div class="detected-elements">
-                    <h3>Detected Elements</h3>
-                    <div id="elementsContainer" class="elements-grid"></div>
-                </div>
-            </section>
-
-            <!-- Previous Results Section -->
-            <section class="previous-results">
-                <h2>Saved Results</h2>
-                <div id="savedResults" class="results-grid"></div>
             </section>
         </main>
     </div>
