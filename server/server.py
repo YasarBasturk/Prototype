@@ -3,6 +3,7 @@ import os
 from werkzeug.utils import secure_filename
 import traceback
 import sys
+import json
 
 # Add the parent directory to Python path
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -60,24 +61,20 @@ def output_file(filename):
     """Serve any file from the output directory."""
     return send_file(os.path.join(OUTPUT_ROOT, filename))
 
-@app.route("/process_image", methods=["POST"])
+@app.route('/process_image', methods=['POST'])
 def process_image():
+    if 'file' not in request.files:
+        return jsonify({'status': 'error', 'error': 'No file provided'}), 400
+        
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'status': 'error', 'error': 'No file selected'}), 400
+        
     try:
-        # Check if the post request has the file part
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file part'}), 400
-            
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({'error': 'No selected file'}), 400
-            
-        if not allowed_file(file.filename):
-            return jsonify({'error': 'File type not allowed'}), 400
-            
         # Save the uploaded file
         filename = secure_filename(file.filename)
-        upload_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(upload_path)
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(filepath)
         
         # Get base name without extension
         base_name = os.path.splitext(filename)[0]
@@ -85,7 +82,7 @@ def process_image():
         
         # Step 1: Process the image
         preprocessed_path = os.path.join(OUTPUT_ROOT, 'preprocessed', processed_filename)
-        preprocess_image(upload_path, preprocessed_path)
+        preprocess_image(filepath, preprocessed_path)
         
         # Step 2: Cell Detection
         cell_json_path = run_cell_detection(preprocessed_path)
@@ -101,20 +98,78 @@ def process_image():
         )
         
         if not merged_viz_path or not os.path.exists(merged_viz_path):
-            return jsonify({'error': 'Failed to generate visualization'}), 500
+            return jsonify({'status': 'error', 'error': 'Failed to generate visualization'}), 500
         
-        # Convert absolute paths to relative URLs
-        def get_relative_path(abs_path):
-            return os.path.relpath(abs_path, OUTPUT_ROOT) if abs_path else ''
+        # Load the JSON data to include in the response
+        with open(merged_json_path, 'r', encoding='utf-8') as f:
+            json_data = json.load(f)
+        
+        # Construct the edit URL
+        json_filename = os.path.basename(merged_json_path)
+        edit_url = f'/edit_results/{json_filename}'
+        
+        # Get the visualization filename
+        viz_filename = os.path.basename(merged_viz_path)
         
         return jsonify({
             'status': 'success',
             'original_path': f'/uploads/{filename}',
-            'output_image': f'/output/{get_relative_path(merged_viz_path)}',  # Main visualization output
+            'output_image': f'/output/merge and split/{viz_filename}',
+            'edit_url': edit_url,
+            'json_data': json_data  # Include the JSON data directly in the response
         })
         
     except Exception as e:
-        error_msg = f"Error processing image: {str(e)}"
-        print(error_msg)
-        traceback.print_exc()
-        return jsonify({'error': error_msg}), 500
+        return jsonify({'status': 'error', 'error': str(e)}), 500
+
+@app.route('/edit_results/<filename>')
+def edit_results(filename):
+    try:
+        json_path = os.path.join(OUTPUT_ROOT, 'merge and split', filename)
+        if not os.path.exists(json_path):
+            return jsonify({'error': 'File not found'}), 404
+            
+        with open(json_path, 'r', encoding='utf-8') as f:
+            json_data = json.load(f)
+            
+        return jsonify(json_data)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/save_edits/<filename>', methods=['POST'])
+def save_edits(filename):
+    try:
+        changes = request.json
+        json_path = os.path.join(OUTPUT_ROOT, 'merge and split', filename)
+        
+        if not os.path.exists(json_path):
+            return jsonify({'error': 'File not found'}), 404
+            
+        # Load current data
+        with open(json_path, 'r', encoding='utf-8') as f:
+            current_data = json.load(f)
+            
+        # Update the data with changes
+        if 'cells_with_text' in changes:
+            for change in changes['cells_with_text']:
+                for cell in current_data['cells_with_text']:
+                    if cell['cell_id'] == change['cell_id']:
+                        cell['text'] = change['text']
+                        break
+                        
+        if 'unassigned_text' in changes:
+            for change in changes['unassigned_text']:
+                for text in current_data['unassigned_text']:
+                    if text['text_id'] == change['text_id']:
+                        text['text'] = change['text']
+                        break
+                        
+        # Save the updated data
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(current_data, f, indent=2, ensure_ascii=False)
+            
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

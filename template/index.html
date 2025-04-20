@@ -3,53 +3,390 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Image Processing Pipeline</title>
+    <title>Document Processing</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <link rel="stylesheet" href="/Static/css/style.css">
+    <style>
+        .text-item {
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 10px;
+            background-color: #f8f9fa;
+        }
+        .text-item.handwritten {
+            background-color: #e9ecef;
+        }
+        .text-item.edited {
+            border-left: 4px solid #28a745;
+        }
+        .confidence {
+            font-size: 0.8em;
+            color: #6c757d;
+        }
+        .confidence.high {
+            color: #28a745;
+        }
+        .confidence.medium {
+            color: #ffc107;
+        }
+        .confidence.low {
+            color: #dc3545;
+        }
+        .edit-controls {
+            margin-top: 10px;
+        }
+        .text-type-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.8em;
+            margin-bottom: 5px;
+        }
+        .badge-handwritten {
+            background-color: #17a2b8;
+            color: white;
+        }
+        .badge-printed {
+            background-color: #6c757d;
+            color: white;
+        }
+        .visualization-legend {
+            background-color: #f8f9fa;
+            padding: 1rem;
+            border-radius: 0.25rem;
+            margin-top: 1rem;
+        }
+        .legend-color-box {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 1px solid #dee2e6;
+            margin-right: 10px;
+        }
+        .img-fluid {
+            max-width: 100%;
+            height: auto;
+        }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>Image Processing Pipeline</h1>
+    <div class="container-fluid">
+        <header class="bg-primary text-white text-center py-3 mb-4">
+            <h1>Document Processing</h1>
+            <p class="lead">Upload an image for automatic processing</p>
         </header>
 
-        <main>
+        <div class="row">
             <!-- Upload Section -->
-            <section class="upload-section">
-                <h2>Upload Image</h2>
-                <form id="uploadForm" class="upload-form">
-                    <div class="file-input">
-                        <input type="file" id="imageInput" accept=".jpg,.jpeg,.png" required>
-                        <label for="imageInput" class="file-label">Choose an image</label>
+            <div class="col-md-4 mb-4">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h3 class="card-title">Upload Image</h3>
                     </div>
-                    <button type="submit" class="submit-btn">Process Image</button>
+                    <div class="card-body">
+                        <form id="uploadForm" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label for="imageFile" class="form-label">Image File</label>
+                                <input type="file" class="form-control" id="imageFile" name="file" accept="image/*" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Process Image</button>
                 </form>
-                <div id="uploadProgress" class="progress-bar" style="display: none;">
-                    <div class="progress"></div>
+                    </div>
                 </div>
-            </section>
+            </div>
 
-            <!-- Results Section -->
-            <section id="resultsSection" class="results-section" style="display: none;">
-                <h2>Processing Results</h2>
-                <div class="image-comparison">
-                    <div class="original-image">
-                        <h3>Original Image</h3>
-                        <img id="originalImage" src="" alt="Original Image">
-                    </div>
-                    <div class="processed-image">
-                        <h3>Analysis Visualization</h3>
-                        <img id="processedImage" src="" alt="Analysis Visualization">
-                        <p class="visualization-legend">
-                            <span class="legend-item"><span class="color-box green"></span> Regular Cells</span>
-                            <span class="legend-item"><span class="color-box purple"></span> Cells with Split Text</span>
-                            <span class="legend-item"><span class="color-box yellow"></span> Text Spanning Connection</span>
-                        </p>
+            <!-- Image Display Section -->
+            <div class="row">
+                <div class="col-md-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header bg-primary text-white">
+                            <h3 class="card-title">Original Image</h3>
+                        </div>
+                        <div class="card-body text-center" id="originalImageContainer">
+                            <p class="text-muted">Upload an image to see it here</p>
+                        </div>
                     </div>
                 </div>
-            </section>
-        </main>
+                <div class="col-md-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header bg-primary text-white">
+                            <h3 class="card-title">Analysis Visualization</h3>
+                        </div>
+                        <div class="card-body text-center" id="processedImageContainer">
+                            <p class="text-muted">Upload an image to see the analysis results</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Text Editing Section -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h3 class="card-title">Text Results</h3>
+                    </div>
+                    <div class="card-body">
+                        <div id="textResults">
+                            <p class="text-muted">Upload an image to view and edit detected text</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <script src="/Static/js/main.js"></script>
+    <!-- Loading Spinner -->
+    <div id="spinner" class="spinner-overlay d-none">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <div class="spinner-message text-white mt-3">Processing your image...</div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const spinner = document.getElementById('spinner');
+            
+            try {
+                spinner.classList.remove('d-none');
+                
+                const response = await fetch('/process_image', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    // Display original image
+                    document.getElementById('originalImageContainer').innerHTML = `
+                        <img src="${data.original_path}" class="img-fluid" alt="Original Image">
+                    `;
+                    
+                    // Display processed image with legend
+                    document.getElementById('processedImageContainer').innerHTML = `
+                        <img src="${data.output_image}" class="img-fluid" alt="Analysis Visualization">
+                        <div class="visualization-legend mt-3">
+                            <h6>Visualization Legend</h6>
+                            <div class="d-flex align-items-center mb-2">
+                                <span class="legend-color-box" style="background-color: rgb(0, 255, 0);"></span>
+                                <span class="ms-2">Cells with text (green)</span>
+                            </div>
+                            <div class="d-flex align-items-center mb-2">
+                                <span class="legend-color-box" style="background-color: rgb(255, 0, 0);"></span>
+                                <span class="ms-2">Empty cells (red)</span>
+                            </div>
+                            <div class="d-flex align-items-center mb-2">
+                                <span class="legend-color-box" style="background-color: rgb(128, 0, 128);"></span>
+                                <span class="ms-2">Cells with spanning text (purple)</span>
+                            </div>
+                            <div class="d-flex align-items-center mb-2">
+                                <span class="legend-color-box" style="background-color: rgb(0, 255, 255);"></span>
+                                <span class="ms-2">Text spanning connector lines (yellow)</span>
+                            </div>
+                            <div class="d-flex align-items-center">
+                                <span class="legend-color-box" style="background-color: rgb(255, 0, 0);"></span>
+                                <span class="ms-2">Unassigned text (blue)</span>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Display JSON data
+                    displayJsonData(data.json_data);
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                alert('Error uploading file: ' + error);
+            } finally {
+                spinner.classList.add('d-none');
+            }
+        });
+
+        function displayJsonData(data) {
+            // Display metadata
+            const metadata = Object.entries(data.metadata)
+                .map(([key, value]) => `
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h6 class="card-subtitle mb-2 text-muted">${key}</h6>
+                                <p class="card-text">${value}</p>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            
+            // Display cells with text
+            const cellsWithText = data.cells_with_text.map(cell => `
+                <div class="col-md-6 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span>Cell #${cell.cell_id}</span>
+                            <span class="badge ${getConfidenceBadgeClass(cell.confidence)}">
+                                ${Math.round(cell.confidence * 100)}%
+                            </span>
+                        </div>
+                        <div class="card-body">
+                            <div class="text-content" data-cell-id="${cell.cell_id}">
+                                ${cell.text}
+                            </div>
+                            ${cell.component_texts ? cell.component_texts.map((component, index) => `
+                                <div class="component-text mt-2">
+                                    <small class="text-muted">Component ${index + 1}</small>
+                                    <div class="text-content" data-component-id="${index}">
+                                        ${component.text}
+                                    </div>
+                                    <small class="text-muted">Confidence: ${Math.round(component.confidence * 100)}%</small>
+                                </div>
+                            `).join('') : ''}
+                        </div>
+                        <div class="card-footer">
+                            <button class="btn btn-sm btn-outline-primary btn-edit">Edit</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            // Display unassigned text
+            const unassignedText = data.unassigned_text.map(text => `
+                <div class="col-md-6 mb-3">
+                    <div class="card h-100">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span>Text #${text.text_id}</span>
+                            <span class="badge ${getConfidenceBadgeClass(text.confidence)}">
+                                ${Math.round(text.confidence * 100)}%
+                            </span>
+                        </div>
+                        <div class="card-body">
+                            <div class="text-content" data-text-id="${text.text_id}">
+                                ${text.text}
+                            </div>
+                        </div>
+                        <div class="card-footer">
+                            <button class="btn btn-sm btn-outline-primary btn-edit">Edit</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            // Combine all sections
+            document.getElementById('textResults').innerHTML = `
+                <div class="mb-4">
+                    <h4 class="mb-3">Document Statistics</h4>
+                    <div class="row">
+                        ${metadata}
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <h4 class="mb-3">Cells with Text</h4>
+                    <div class="row">
+                        ${cellsWithText}
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <h4 class="mb-3">Unassigned Text</h4>
+                    <div class="row">
+                        ${unassignedText}
+                    </div>
+                </div>
+            `;
+            
+            // Add event listeners to edit buttons
+            document.querySelectorAll('.btn-edit').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const card = this.closest('.card');
+                    const textContent = card.querySelector('.text-content');
+                    const currentText = textContent.textContent.trim();
+                    
+                    textContent.innerHTML = `
+                        <div class="edit-controls">
+                            <textarea class="form-control edit-textarea" rows="3">${currentText}</textarea>
+                            <div class="d-flex mt-2">
+                                <button class="btn btn-sm btn-outline-secondary me-2 cancel-edit">Cancel</button>
+                                <button class="btn btn-sm btn-outline-success save-edit">Save</button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Add event listeners to cancel and save buttons
+                    const cancelBtn = textContent.querySelector('.cancel-edit');
+                    const saveBtn = textContent.querySelector('.save-edit');
+                    
+                    cancelBtn.addEventListener('click', function() {
+                        textContent.textContent = currentText;
+                    });
+                    
+                    saveBtn.addEventListener('click', function() {
+                        const newText = textContent.querySelector('.edit-textarea').value;
+                        textContent.textContent = newText;
+                        
+                        // Save changes to server
+                        saveChanges(card, newText);
+                    });
+                });
+            });
+        }
+
+        function getConfidenceBadgeClass(confidence) {
+            if (confidence >= 0.8) return 'bg-success';
+            if (confidence >= 0.5) return 'bg-warning';
+            return 'bg-danger';
+        }
+
+        function saveChanges(card, newText) {
+            const changes = {
+                cells_with_text: [],
+                unassigned_text: []
+            };
+
+            const textContent = card.querySelector('.text-content');
+            if (textContent.dataset.cellId) {
+                changes.cells_with_text.push({
+                    cell_id: parseInt(textContent.dataset.cellId),
+                    text: newText
+                });
+            } else if (textContent.dataset.textId) {
+                changes.unassigned_text.push({
+                    text_id: parseInt(textContent.dataset.textId),
+                    text: newText
+                });
+            }
+
+            // Get the filename from the processed image URL
+            const processedImage = document.getElementById('processedImageContainer').querySelector('img');
+            const filename = processedImage.src.split('/').pop()
+                .replace('visualization_', '')
+                .replace('_res_combined_with_spanning.jpg', '_res_combined_with_spanning.json');
+
+            // Send changes to server
+            fetch('/save_edits/' + filename, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(changes)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Changes saved successfully!');
+                } else {
+                    alert('Error saving changes: ' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('Error saving changes: ' + error);
+            });
+        }
+    </script>
 </body>
 </html> 
