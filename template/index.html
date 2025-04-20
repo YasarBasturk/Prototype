@@ -14,6 +14,7 @@
             padding: 10px;
             margin-bottom: 10px;
             background-color: #f8f9fa;
+            transition: all 0.3s ease;
         }
         .text-item.handwritten {
             background-color: #e9ecef;
@@ -69,6 +70,108 @@
             max-width: 100%;
             height: auto;
         }
+        .btn-save-results {
+            margin-bottom: 20px;
+            background-color: #198754;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .document-name-modal .modal-content {
+            border-radius: 8px;
+        }
+        
+        .document-name-modal .modal-header {
+            background-color: #0d6efd;
+            color: white;
+            border-radius: 8px 8px 0 0;
+        }
+        
+        /* Added styles for text editing */
+        .card.edited {
+            border-left: 4px solid #28a745;
+        }
+        
+        .text-content {
+            min-height: 50px;
+            padding: 8px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+        
+        .edit-textarea {
+            min-height: 100px;
+        }
+        
+        .save-indicator {
+            padding: 4px 8px;
+            background-color: #d4edda;
+            border-radius: 4px;
+            margin-top: 8px;
+            font-size: 0.8rem;
+            color: #155724;
+        }
+        
+        /* Animate changes */
+        @keyframes highlight {
+            0% { background-color: transparent; }
+            50% { background-color: #d4edda; }
+            100% { background-color: transparent; }
+        }
+        
+        .text-content-changed {
+            animation: highlight 1.5s ease;
+        }
+        
+        /* Editing states */
+        .text-item .btn-revert {
+            transition: all 0.3s ease;
+        }
+        
+        .text-item.edited {
+            border-left: 4px solid #28a745;
+            box-shadow: 0 0 5px rgba(40, 167, 69, 0.2);
+        }
+        
+        .text-item .text-content.editing {
+            background-color: #f8f9fa;
+            border: 1px dashed #ced4da;
+        }
+        
+        .save-indicator {
+            margin-top: 8px;
+            font-size: 0.8rem;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: opacity 0.5s ease;
+        }
+        
+        .save-indicator.success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .save-indicator.error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        .save-indicator.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        /* Animation for feedback */
+        @keyframes fadeInOut {
+            0% { opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+        
+        .flash-message {
+            animation: fadeInOut 3s ease-in-out;
+        }
     </style>
 </head>
 <body>
@@ -92,7 +195,10 @@
                                 <input type="file" class="form-control" id="imageFile" name="file" accept="image/*" required>
                             </div>
                             <button type="submit" class="btn btn-primary">Process Image</button>
-                </form>
+                            <button type="button" id="viewDocumentsBtn" class="btn btn-secondary ms-2">
+                                <i class="bi bi-folder"></i> View Documents
+                            </button>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -126,8 +232,11 @@
         <div class="row">
             <div class="col-12">
                 <div class="card">
-                    <div class="card-header bg-primary text-white">
-                        <h3 class="card-title">Text Results</h3>
+                    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                        <h3 class="card-title mb-0">Text Results</h3>
+                        <button id="saveResultsBtn" class="btn btn-success d-none">
+                            <i class="bi bi-save"></i> Save Results
+                        </button>
                     </div>
                     <div class="card-body">
                         <div id="textResults">
@@ -147,8 +256,157 @@
         <div class="spinner-message text-white mt-3">Processing your image...</div>
     </div>
 
+    <!-- Document Name Modal -->
+    <div class="modal fade document-name-modal" id="documentNameModal" tabindex="-1" aria-labelledby="documentNameModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="documentNameModalLabel">Save Document</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="documentName" class="form-label">Document Name</label>
+                        <input type="text" class="form-control" id="documentName" placeholder="Enter a name for this document">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="confirmSaveBtn">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Documents List Modal -->
+    <div class="modal fade" id="documentsListModal" tabindex="-1" aria-labelledby="documentsListModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="documentsListModalLabel">Saved Documents</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Document Name</th>
+                                    <th>Date Created</th>
+                                    <th>Items Count</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="documentsTableBody">
+                                <tr>
+                                    <td colspan="4" class="text-center">Loading documents...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Document View Modal -->
+    <div class="modal fade" id="documentViewModal" tabindex="-1" aria-labelledby="documentViewModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="documentViewModalLabel">Document Details</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <h6>Document Information</h6>
+                            <table class="table table-bordered">
+                                <tbody id="documentInfoTable">
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Original Image</h6>
+                            <div id="documentImage" class="text-center">
+                            </div>
+                        </div>
+                    </div>
+                    <h6>Text Items</h6>
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Text</th>
+                                    <th>Confidence</th>
+                                    <th>Region</th>
+                                    <th>Edited</th>
+                                </tr>
+                            </thead>
+                            <tbody id="textItemsTableBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="backToDocumentsBtn">Back to Documents</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // Global variables to store current processing results
+        let currentJsonData = null;
+        let currentOriginalPath = null;
+        let currentOutputImage = null;
+        
+        // Track edited items
+        const editedItems = new Set();
+        
+        // Initialize modals
+        let documentNameModal = null;
+        let documentsListModal = null;
+        let documentViewModal = null;
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize Bootstrap modals
+            documentNameModal = new bootstrap.Modal(document.getElementById('documentNameModal'));
+            documentsListModal = new bootstrap.Modal(document.getElementById('documentsListModal'));
+            documentViewModal = new bootstrap.Modal(document.getElementById('documentViewModal'));
+            
+            // Add event listener for save results button
+            document.getElementById('saveResultsBtn').addEventListener('click', function() {
+                documentNameModal.show();
+            });
+            
+            // Add event listener for confirm save button
+            document.getElementById('confirmSaveBtn').addEventListener('click', function() {
+                const documentName = document.getElementById('documentName').value.trim() || 'Unnamed Document';
+                saveDocumentToDatabase(documentName);
+                documentNameModal.hide();
+            });
+            
+            // Add event listener for view documents button
+            document.getElementById('viewDocumentsBtn').addEventListener('click', function() {
+                loadDocumentsList();
+                documentsListModal.show();
+            });
+            
+            // Add event listener for back to documents button
+            document.getElementById('backToDocumentsBtn').addEventListener('click', function() {
+                documentViewModal.hide();
+                loadDocumentsList();
+                documentsListModal.show();
+            });
+        });
+
         document.getElementById('uploadForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
@@ -166,6 +424,11 @@
                 const data = await response.json();
                 
                 if (data.status === 'success') {
+                    // Store current processing results
+                    currentJsonData = data.json_data;
+                    currentOriginalPath = data.original_path;
+                    currentOutputImage = data.output_image;
+                    
                     // Display original image
                     document.getElementById('originalImageContainer').innerHTML = `
                         <img src="${data.original_path}" class="img-fluid" alt="Original Image">
@@ -201,6 +464,9 @@
                     
                     // Display JSON data
                     displayJsonData(data.json_data);
+                    
+                    // Show save results button
+                    document.getElementById('saveResultsBtn').classList.remove('d-none');
                 } else {
                     alert('Error: ' + data.error);
                 }
@@ -228,7 +494,7 @@
             // Display cells with text
             const cellsWithText = data.cells_with_text.map(cell => `
                 <div class="col-md-6 mb-3">
-                    <div class="card h-100">
+                    <div class="card h-100 text-item" data-type="cell" data-id="${cell.cell_id}">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <span>Cell #${cell.cell_id}</span>
                             <span class="badge ${getConfidenceBadgeClass(cell.confidence)}">
@@ -236,7 +502,7 @@
                             </span>
                         </div>
                         <div class="card-body">
-                            <div class="text-content" data-cell-id="${cell.cell_id}">
+                            <div class="text-content" id="cell-${cell.cell_id}" data-original-text="${cell.text}">
                                 ${cell.text}
                             </div>
                             ${cell.component_texts ? cell.component_texts.map((component, index) => `
@@ -251,6 +517,7 @@
                         </div>
                         <div class="card-footer">
                             <button class="btn btn-sm btn-outline-primary btn-edit">Edit</button>
+                            <button class="btn btn-sm btn-outline-secondary btn-revert d-none">Revert</button>
                         </div>
                     </div>
                 </div>
@@ -259,7 +526,7 @@
             // Display unassigned text
             const unassignedText = data.unassigned_text.map(text => `
                 <div class="col-md-6 mb-3">
-                    <div class="card h-100">
+                    <div class="card h-100 text-item" data-type="text" data-id="${text.text_id}">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <span>Text #${text.text_id}</span>
                             <span class="badge ${getConfidenceBadgeClass(text.confidence)}">
@@ -267,12 +534,13 @@
                             </span>
                         </div>
                         <div class="card-body">
-                            <div class="text-content" data-text-id="${text.text_id}">
+                            <div class="text-content" id="text-${text.text_id}" data-original-text="${text.text}">
                                 ${text.text}
                             </div>
                         </div>
                         <div class="card-footer">
                             <button class="btn btn-sm btn-outline-primary btn-edit">Edit</button>
+                            <button class="btn btn-sm btn-outline-secondary btn-revert d-none">Revert</button>
                         </div>
                     </div>
                 </div>
@@ -302,38 +570,284 @@
             
             // Add event listeners to edit buttons
             document.querySelectorAll('.btn-edit').forEach(btn => {
-                btn.addEventListener('click', function() {
-                    const card = this.closest('.card');
-                    const textContent = card.querySelector('.text-content');
-                    const currentText = textContent.textContent.trim();
-                    
-                    textContent.innerHTML = `
-                        <div class="edit-controls">
-                            <textarea class="form-control edit-textarea" rows="3">${currentText}</textarea>
-                            <div class="d-flex mt-2">
-                                <button class="btn btn-sm btn-outline-secondary me-2 cancel-edit">Cancel</button>
-                                <button class="btn btn-sm btn-outline-success save-edit">Save</button>
-                            </div>
-                        </div>
-                    `;
-                    
-                    // Add event listeners to cancel and save buttons
-                    const cancelBtn = textContent.querySelector('.cancel-edit');
-                    const saveBtn = textContent.querySelector('.save-edit');
-                    
-                    cancelBtn.addEventListener('click', function() {
-                        textContent.textContent = currentText;
-                    });
-                    
-                    saveBtn.addEventListener('click', function() {
-                        const newText = textContent.querySelector('.edit-textarea').value;
-                        textContent.textContent = newText;
-                        
-                        // Save changes to server
-                        saveChanges(card, newText);
-                    });
-                });
+                btn.addEventListener('click', handleEditClick);
             });
+            
+            // Add event listeners to revert buttons
+            document.querySelectorAll('.btn-revert').forEach(btn => {
+                btn.addEventListener('click', handleRevertClick);
+            });
+        }
+
+        function handleEditClick() {
+            const card = this.closest('.card');
+            const textContent = card.querySelector('.text-content');
+            const currentText = textContent.textContent.trim();
+            const revertBtn = card.querySelector('.btn-revert');
+            
+            // Add editing class
+            textContent.classList.add('editing');
+            
+            // Convert to editable textarea
+            textContent.innerHTML = `
+                <div class="edit-controls">
+                    <textarea class="form-control edit-textarea" rows="3">${currentText}</textarea>
+                    <div class="d-flex mt-2">
+                        <button class="btn btn-sm btn-outline-secondary me-2 cancel-edit">Cancel</button>
+                        <button class="btn btn-sm btn-outline-success save-edit">Save</button>
+                    </div>
+                </div>
+            `;
+            
+            // Hide the edit button while editing
+            this.style.display = 'none';
+            
+            // Add event listeners to cancel and save buttons
+            const cancelBtn = textContent.querySelector('.cancel-edit');
+            const saveBtn = textContent.querySelector('.save-edit');
+            
+            cancelBtn.addEventListener('click', function() {
+                // Restore the original content
+                textContent.innerHTML = currentText;
+                // Remove editing class
+                textContent.classList.remove('editing');
+                // Show the edit button again
+                card.querySelector('.btn-edit').style.display = 'inline-block';
+            });
+            
+            saveBtn.addEventListener('click', function() {
+                const newText = textContent.querySelector('.edit-textarea').value;
+                // Remove editing class
+                textContent.classList.remove('editing');
+                // Update the displayed text
+                textContent.innerHTML = newText;
+                
+                // Store original text if this is the first edit
+                if (!textContent.dataset.edited) {
+                    textContent.dataset.edited = "true";
+                    // Make revert button visible
+                    revertBtn.classList.remove('d-none');
+                }
+                
+                // Show the edit button again
+                card.querySelector('.btn-edit').style.display = 'inline-block';
+                
+                // Mark the item as edited
+                card.classList.add('edited');
+                
+                // Save changes to the data and server
+                saveTextChange(card, newText);
+            });
+        }
+
+        function handleRevertClick() {
+            const card = this.closest('.card');
+            const textContent = card.querySelector('.text-content');
+            const originalText = textContent.dataset.originalText;
+            
+            // Confirm before reverting
+            if (confirm('Are you sure you want to revert this text to its original value?')) {
+                // Restore the original text
+                textContent.innerHTML = originalText;
+                
+                // Remove the edited flag
+                textContent.dataset.edited = '';
+                card.classList.remove('edited');
+                
+                // Hide the revert button
+                this.classList.add('d-none');
+                
+                // Save the reverted text
+                saveTextChange(card, originalText);
+            }
+        }
+
+        function saveTextChange(card, newText) {
+            const itemType = card.dataset.type;
+            const itemId = parseInt(card.dataset.id);
+            const textContent = card.querySelector('.text-content');
+            
+            const changes = {
+                cells_with_text: [],
+                unassigned_text: []
+            };
+
+            if (itemType === 'cell') {
+                changes.cells_with_text.push({
+                    cell_id: itemId,
+                    text: newText
+                });
+                
+                // Update current JSON data
+                if (currentJsonData && currentJsonData.cells_with_text) {
+                    const cellIndex = currentJsonData.cells_with_text.findIndex(cell => cell.cell_id === itemId);
+                    if (cellIndex !== -1) {
+                        currentJsonData.cells_with_text[cellIndex].text = newText;
+                        editedItems.add(`cell_${itemId}`);
+                    }
+                }
+            } else if (itemType === 'text') {
+                changes.unassigned_text.push({
+                    text_id: itemId,
+                    text: newText
+                });
+                
+                // Update current JSON data
+                if (currentJsonData && currentJsonData.unassigned_text) {
+                    const textIndex = currentJsonData.unassigned_text.findIndex(text => text.text_id === itemId);
+                    if (textIndex !== -1) {
+                        currentJsonData.unassigned_text[textIndex].text = newText;
+                        editedItems.add(`text_${itemId}`);
+                    }
+                }
+            }
+
+            // Get the filename from the processed image URL
+            const processedImage = document.getElementById('processedImageContainer').querySelector('img');
+            if (!processedImage) {
+                console.error('Processed image not found');
+                showErrorMessage(textContent, 'Could not determine JSON file path');
+                return;
+            }
+            
+            // Show a saving indicator
+            const savingIndicator = document.createElement('div');
+            savingIndicator.className = 'save-indicator info';
+            savingIndicator.textContent = 'Saving...';
+            textContent.appendChild(savingIndicator);
+            
+            // Extract base filename to use with find_json endpoint
+            const extractBaseFilename = () => {
+                let imageSrc = processedImage.src;
+                let parts = imageSrc.split('/');
+                let imageFilename = parts[parts.length - 1];
+                
+                console.log('Image filename:', imageFilename);
+                
+                // Extract the base prefix (usually processed_XXX)
+                let basePrefix;
+                
+                if (imageFilename.startsWith('visualization_')) {
+                    // Remove visualization_ prefix
+                    basePrefix = imageFilename.replace('visualization_', '').split('.')[0];
+                    // If it contains _res_, keep only the part before it
+                    if (basePrefix.includes('_res_')) {
+                        basePrefix = basePrefix.split('_res_')[0];
+                    }
+                } 
+                else if (imageFilename.includes('_res_')) {
+                    // If it contains _res_, keep only the part before it
+                    basePrefix = imageFilename.split('_res_')[0];
+                }
+                else {
+                    // Just use the filename without extension
+                    basePrefix = imageFilename.split('.')[0];
+                }
+                
+                console.log('Extracted base prefix:', basePrefix);
+                return basePrefix;
+            };
+            
+            // Get the base filename to search for
+            const basePrefix = extractBaseFilename();
+            
+            // Use the find_json endpoint to get the correct JSON filename
+            fetch(`/find_json/${basePrefix}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (!data.success) {
+                        throw new Error(data.error || 'Failed to find JSON file');
+                    }
+                    
+                    console.log('Available JSON files:', data.files);
+                    console.log('Matching files:', data.matching_files);
+                    
+                    // Use the best match if available, otherwise fall back to first matching file
+                    let jsonFilename = data.best_match;
+                    
+                    if (!jsonFilename && data.matching_files && data.matching_files.length > 0) {
+                        jsonFilename = data.matching_files[0];
+                        console.log('Using first matching file:', jsonFilename);
+                    }
+                    
+                    if (!jsonFilename) {
+                        throw new Error('No matching JSON file found');
+                    }
+                    
+                    console.log('Using JSON file:', jsonFilename);
+                    
+                    // Now save the changes using the found filename
+                    return fetch('/save_edits/' + jsonFilename, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(changes)
+                    });
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // Remove the saving indicator
+                    savingIndicator.remove();
+                    
+                    if (data.success) {
+                        console.log('Changes saved successfully!', data);
+                        
+                        // Add visual indicator that the change was saved
+                        const saveIndicator = document.createElement('div');
+                        saveIndicator.className = 'save-indicator success';
+                        saveIndicator.textContent = 'Changes saved';
+                        textContent.appendChild(saveIndicator);
+                        
+                        // Fade out and remove after 3 seconds
+                        setTimeout(() => {
+                            saveIndicator.style.opacity = '0';
+                            setTimeout(() => saveIndicator.remove(), 1000);
+                        }, 2000);
+                    } else {
+                        console.error('Error saving changes:', data.error);
+                        showErrorMessage(textContent, data.error || 'Unknown error saving changes');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error saving changes:', error);
+                    
+                    // Remove the saving indicator
+                    savingIndicator.remove();
+                    
+                    // Show error message
+                    showErrorMessage(textContent, error.message);
+                    
+                    // If the error was due to not finding a file, try the fallback method
+                    if (error.message.includes('No matching') || error.message.includes('not found')) {
+                        console.log('Trying fallback method');
+                        handleFileNotFoundError(textContent, basePrefix + '.json', changes);
+                    }
+                });
+        }
+
+        function showErrorMessage(container, message) {
+            // Create error message
+            const errorMsg = document.createElement('div');
+            errorMsg.className = 'save-indicator error';
+            errorMsg.textContent = `Error: ${message}`;
+            container.appendChild(errorMsg);
+            
+            // Fade out and remove after 5 seconds
+            setTimeout(() => {
+                errorMsg.style.opacity = '0';
+                setTimeout(() => errorMsg.remove(), 1000);
+            }, 4000);
         }
 
         function getConfidenceBadgeClass(confidence) {
@@ -342,50 +856,225 @@
             return 'bg-danger';
         }
 
-        function saveChanges(card, newText) {
-            const changes = {
-                cells_with_text: [],
-                unassigned_text: []
+        function saveDocumentToDatabase(documentName) {
+            // Prepare data for saving
+            const saveData = {
+                document_name: documentName,
+                original_image_path: currentOriginalPath,
+                output_image_path: currentOutputImage,
+                json_data: currentJsonData,
+                edited_items: Array.from(editedItems)
             };
-
-            const textContent = card.querySelector('.text-content');
-            if (textContent.dataset.cellId) {
-                changes.cells_with_text.push({
-                    cell_id: parseInt(textContent.dataset.cellId),
-                    text: newText
-                });
-            } else if (textContent.dataset.textId) {
-                changes.unassigned_text.push({
-                    text_id: parseInt(textContent.dataset.textId),
-                    text: newText
-                });
-            }
-
-            // Get the filename from the processed image URL
-            const processedImage = document.getElementById('processedImageContainer').querySelector('img');
-            const filename = processedImage.src.split('/').pop()
-                .replace('visualization_', '')
-                .replace('_res_combined_with_spanning.jpg', '_res_combined_with_spanning.json');
-
-            // Send changes to server
-            fetch('/save_edits/' + filename, {
+            
+            // Send data to server
+            fetch('/save_results', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(changes)
+                body: JSON.stringify(saveData)
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert('Changes saved successfully!');
+                    alert(`Document "${documentName}" saved successfully!`);
                 } else {
-                    alert('Error saving changes: ' + data.error);
+                    alert('Error saving document: ' + data.error);
                 }
             })
             .catch(error => {
-                alert('Error saving changes: ' + error);
+                alert('Error saving document: ' + error);
             });
+        }
+
+        function loadDocumentsList() {
+            const tableBody = document.getElementById('documentsTableBody');
+            tableBody.innerHTML = '<tr><td colspan="4" class="text-center">Loading documents...</td></tr>';
+            
+            fetch('/get_documents')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.documents) {
+                        if (data.documents.length === 0) {
+                            tableBody.innerHTML = '<tr><td colspan="4" class="text-center">No documents found</td></tr>';
+                            return;
+                        }
+                        
+                        tableBody.innerHTML = '';
+                        data.documents.forEach(doc => {
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td>${doc.document_name}</td>
+                                <td>${new Date(doc.created_at).toLocaleString()}</td>
+                                <td>${doc.text_count || 0}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary view-document" data-document-id="${doc.id}">
+                                        <i class="bi bi-eye"></i> View
+                                    </button>
+                                </td>
+                            `;
+                            tableBody.appendChild(row);
+                        });
+                        
+                        // Add event listeners to view buttons
+                        document.querySelectorAll('.view-document').forEach(btn => {
+                            btn.addEventListener('click', function() {
+                                const documentId = this.dataset.documentId;
+                                viewDocument(documentId);
+                            });
+                        });
+                    } else {
+                        tableBody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">Error: ${data.error || 'Failed to load documents'}</td></tr>`;
+                    }
+                })
+                .catch(error => {
+                    tableBody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">Error: ${error.message}</td></tr>`;
+                });
+        }
+        
+        function viewDocument(documentId) {
+            fetch(`/get_document/${documentId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.document) {
+                        const doc = data.document;
+                        
+                        // Display document info
+                        const infoTable = document.getElementById('documentInfoTable');
+                        infoTable.innerHTML = `
+                            <tr><th>Document Name</th><td>${doc.document_name}</td></tr>
+                            <tr><th>Created</th><td>${new Date(doc.created_at).toLocaleString()}</td></tr>
+                            <tr><th>Filename</th><td>${doc.filename || 'N/A'}</td></tr>
+                            <tr><th>Document ID</th><td>${doc.id}</td></tr>
+                        `;
+                        
+                        // Display document image
+                        const imageContainer = document.getElementById('documentImage');
+                        if (doc.original_image_path) {
+                            imageContainer.innerHTML = `<img src="/${doc.original_image_path}" class="img-fluid" alt="Original Image">`;
+                        } else {
+                            imageContainer.innerHTML = `<p class="text-muted">No image available</p>`;
+                        }
+                        
+                        // Display text items
+                        const textItemsTable = document.getElementById('textItemsTableBody');
+                        textItemsTable.innerHTML = '';
+                        
+                        if (doc.text_items && doc.text_items.length > 0) {
+                            doc.text_items.forEach(item => {
+                                const row = document.createElement('tr');
+                                const region = JSON.parse(item.text_region || '{}');
+                                const regionType = region.cell_id !== undefined ? `Cell #${region.cell_id}` : 
+                                                 region.text_id !== undefined ? `Text #${region.text_id}` : 'Unknown';
+                                
+                                row.innerHTML = `
+                                    <td>${item.id}</td>
+                                    <td>${item.text}</td>
+                                    <td>${item.confidence ? Math.round(item.confidence * 100) + '%' : 'N/A'}</td>
+                                    <td>${regionType}</td>
+                                    <td>${item.edited ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-secondary">No</span>'}</td>
+                                `;
+                                textItemsTable.appendChild(row);
+                            });
+                        } else {
+                            textItemsTable.innerHTML = '<tr><td colspan="5" class="text-center">No text items found</td></tr>';
+                        }
+                        
+                        // Update modal title
+                        document.getElementById('documentViewModalLabel').textContent = `Document: ${doc.document_name}`;
+                        
+                        // Hide documents list modal and show document view modal
+                        documentsListModal.hide();
+                        documentViewModal.show();
+                    } else {
+                        alert('Error: ' + (data.error || 'Failed to load document'));
+                    }
+                })
+                .catch(error => {
+                    alert('Error: ' + error.message);
+                });
+        }
+
+        // Helper function to handle common file not found errors
+        function handleFileNotFoundError(textContent, jsonFilename, changes) {
+            console.log('Trying fallback methods for save_edits due to file not found');
+            
+            // Show retry indicator
+            const retryIndicator = document.createElement('div');
+            retryIndicator.className = 'save-indicator info';
+            retryIndicator.textContent = 'Retrying with alternate method...';
+            retryIndicator.style = 'opacity: 1;';
+            textContent.appendChild(retryIndicator);
+            
+            // Try alternative filename patterns
+            const fallbackFilenames = [
+                'combined_with_spanning.json',
+                jsonFilename.replace('_res_combined_with_spanning.json', '.json'),
+                'results.json'
+            ];
+            
+            // Try each fallback filename in sequence
+            let currentIndex = 0;
+            
+            function tryNextFallback() {
+                if (currentIndex >= fallbackFilenames.length) {
+                    // We've tried all fallbacks and failed
+                    retryIndicator.remove();
+                    showErrorMessage(textContent, 'Could not save changes: File not found');
+                    return;
+                }
+                
+                const fallbackName = fallbackFilenames[currentIndex];
+                console.log(`Trying fallback #${currentIndex + 1}: ${fallbackName}`);
+                retryIndicator.textContent = `Retrying with ${fallbackName}...`;
+                
+                fetch('/save_edits/' + fallbackName, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(changes)
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        // If this fallback fails, try the next one
+                        currentIndex++;
+                        return tryNextFallback();
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data && data.success) {
+                        // Success!
+                        retryIndicator.remove();
+                        console.log('Fallback succeeded:', data);
+                        
+                        // Show success message
+                        const successIndicator = document.createElement('div');
+                        successIndicator.className = 'save-indicator success';
+                        successIndicator.textContent = 'Changes saved successfully';
+                        textContent.appendChild(successIndicator);
+                        
+                        // Fade out success message
+                        setTimeout(() => {
+                            successIndicator.style.opacity = '0';
+                            setTimeout(() => successIndicator.remove(), 1000);
+                        }, 2000);
+                    } else if (data) {
+                        // We got a response but it wasn't successful
+                        currentIndex++;
+                        tryNextFallback();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error with fallback:', error);
+                    currentIndex++;
+                    tryNextFallback();
+                });
+            }
+            
+            // Start the fallback cascade
+            tryNextFallback();
         }
     </script>
 </body>
