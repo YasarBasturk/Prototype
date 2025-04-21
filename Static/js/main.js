@@ -157,7 +157,7 @@ function displayJsonData(data) {
     
     // Display cells with text
     const cellsWithText = data.cells_with_text.map(cell => `
-        <div class="col-md-4 mb-3">
+        <div class="col-md-6 mb-3">
             <div class="card h-100 text-item" data-type="cell" data-id="${cell.cell_id}">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <span>Cell #${cell.cell_id}</span>
