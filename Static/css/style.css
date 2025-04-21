@@ -632,4 +632,241 @@ header {
 
 .color-box.yellow {
     background-color: #FFFF00;
+}
+
+/* Confidence threshold slider styles */
+.form-range {
+    height: 1.5rem;
+    padding: 0;
+    background: transparent;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.form-range:focus {
+    outline: none;
+}
+
+.form-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: #007bff;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background-color 0.15s ease-in-out;
+}
+
+.form-range::-webkit-slider-thumb:hover {
+    background: #0056b3;
+}
+
+.form-range::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 0.5rem;
+    background: #e9ecef;
+    border-radius: 0.25rem;
+    cursor: pointer;
+}
+
+#thresholdValue {
+    min-width: 3.5em;
+    text-align: right;
+    font-weight: 500;
+    color: #007bff;
+}
+
+/* Confidence threshold in header */
+.card-header .form-range {
+    height: 1rem;
+    padding: 0;
+    margin: 0;
+}
+
+.card-header .form-range::-webkit-slider-thumb {
+    width: 14px;
+    height: 14px;
+    margin-top: -5px;
+}
+
+.card-header .form-range::-webkit-slider-runnable-track {
+    height: 4px;
+    background: #dee2e6;
+}
+
+#thresholdValue {
+    min-width: 3.5em;
+    font-size: 0.9em;
+    font-weight: 600;
+}
+
+.gap-4 {
+    gap: 1.5rem !important;
+}
+
+/* Additional styles from index.html */
+.text-item {
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 10px;
+    margin-bottom: 10px;
+    background-color: #f8f9fa;
+    transition: all 0.3s ease;
+}
+.text-item.handwritten {
+    background-color: #e9ecef;
+}
+.text-item.edited {
+    border-left: 4px solid #28a745;
+}
+.confidence {
+    font-size: 0.8em;
+    color: #6c757d;
+}
+.confidence.high {
+    color: #28a745;
+}
+.confidence.medium {
+    color: #ffc107;
+}
+.confidence.low {
+    color: #dc3545;
+}
+.edit-controls {
+    margin-top: 10px;
+}
+.text-type-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.8em;
+    margin-bottom: 5px;
+}
+.badge-handwritten {
+    background-color: #17a2b8;
+    color: white;
+}
+.badge-printed {
+    background-color: #6c757d;
+    color: white;
+}
+.visualization-legend {
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 0.25rem;
+    margin-top: 1rem;
+}
+.legend-color-box {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 1px solid #dee2e6;
+    margin-right: 10px;
+}
+.img-fluid {
+    max-width: 100%;
+    height: auto;
+}
+.btn-save-results {
+    margin-bottom: 20px;
+    background-color: #198754;
+    color: white;
+    font-weight: bold;
+}
+
+.document-name-modal .modal-content {
+    border-radius: 8px;
+}
+
+.document-name-modal .modal-header {
+    background-color: #0d6efd;
+    color: white;
+    border-radius: 8px 8px 0 0;
+}
+
+/* Added styles for text editing */
+.card.edited {
+    border-left: 4px solid #28a745;
+}
+
+.text-content {
+    min-height: 50px;
+    padding: 8px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.edit-textarea {
+    min-height: 100px;
+}
+
+.save-indicator {
+    padding: 4px 8px;
+    background-color: #d4edda;
+    border-radius: 4px;
+    margin-top: 8px;
+    font-size: 0.8rem;
+    color: #155724;
+}
+
+/* Animate changes */
+@keyframes highlight {
+    0% { background-color: transparent; }
+    50% { background-color: #d4edda; }
+    100% { background-color: transparent; }
+}
+
+.text-content-changed {
+    animation: highlight 1.5s ease;
+}
+
+/* Editing states */
+.text-item .btn-revert {
+    transition: all 0.3s ease;
+}
+
+.text-item.edited {
+    border-left: 4px solid #28a745;
+    box-shadow: 0 0 5px rgba(40, 167, 69, 0.2);
+}
+
+.text-item .text-content.editing {
+    background-color: #f8f9fa;
+    border: 1px dashed #ced4da;
+}
+
+.save-indicator {
+    margin-top: 8px;
+    font-size: 0.8rem;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: opacity 0.5s ease;
+}
+
+.save-indicator.success {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.save-indicator.error {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.save-indicator.info {
+    background-color: #d1ecf1;
+    color: #0c5460;
+}
+
+/* Animation for feedback */
+@keyframes fadeInOut {
+    0% { opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+.flash-message {
+    animation: fadeInOut 3s ease-in-out;
 } 
