@@ -80,13 +80,13 @@ document.getElementById('uploadForm').addEventListener('submit', async (e) => {
     try {
         spinner.classList.remove('d-none');
         
-        const response = await fetch('/process_image', {
-            method: 'POST',
-            body: formData
-        });
-        
-        const data = await response.json();
-        
+            const response = await fetch('/process_image', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+
         if (data.status === 'success') {
             // Store current processing results
             currentJsonData = data.json_data;
@@ -157,7 +157,7 @@ function displayJsonData(data) {
     
     // Display cells with text
     const cellsWithText = data.cells_with_text.map(cell => `
-        <div class="col-md-6 mb-3">
+        <div class="col-md-4 mb-3">
             <div class="card h-100 text-item" data-type="cell" data-id="${cell.cell_id}">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <span>Cell #${cell.cell_id}</span>
@@ -371,9 +371,9 @@ function saveTextChange(card, newText) {
     if (!processedImage) {
         console.error('Processed image not found');
         showErrorMessage(textContent, 'Could not determine JSON file path');
-        return;
-    }
-    
+                return;
+            }
+
     // Show a saving indicator
     const savingIndicator = document.createElement('div');
     savingIndicator.className = 'save-indicator info';
