@@ -54,15 +54,29 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateVisibleTextItems() {
         const threshold = thresholdSlider.value / 100;
         const textItems = document.querySelectorAll('.text-item');
+        let visibleItems = 0;
         
         textItems.forEach(item => {
             const confidenceSpan = item.querySelector('.badge');
             const confidence = parseInt(confidenceSpan.textContent) / 100;
             
             if (confidence < threshold) {
-                item.style.display = 'block';
+                item.closest('.col-md-4').style.display = 'block';
+                visibleItems++;
             } else {
-                item.style.display = 'none';
+                item.closest('.col-md-4').style.display = 'none';
+            }
+        });
+        
+        // Add a class to the container to use CSS grid instead of Bootstrap when filtering
+        const containers = document.querySelectorAll('.row');
+        containers.forEach(container => {
+            if (container.querySelector('.text-item')) {
+                if (visibleItems < textItems.length) {
+                    container.classList.add('filtered-grid');
+                } else {
+                    container.classList.remove('filtered-grid');
+                }
             }
         });
     }
@@ -157,7 +171,7 @@ function displayJsonData(data) {
     
     // Display cells with text
     const cellsWithText = data.cells_with_text.map(cell => `
-        <div class="col-md-6 mb-3">
+        <div class="col-md-4 mb-3">
             <div class="card h-100 text-item" data-type="cell" data-id="${cell.cell_id}">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <span>Cell #${cell.cell_id}</span>
@@ -169,15 +183,7 @@ function displayJsonData(data) {
                     <div class="text-content" id="cell-${cell.cell_id}" data-original-text="${cell.text}">
                         ${cell.text}
                     </div>
-                    ${cell.component_texts ? cell.component_texts.map((component, index) => `
-                        <div class="component-text mt-2">
-                            <small class="text-muted">Component ${index + 1}</small>
-                            <div class="text-content" data-component-id="${index}">
-                                ${component.text}
-                            </div>
-                            <small class="text-muted">Confidence: ${Math.round(component.confidence * 100)}%</small>
-                        </div>
-                    `).join('') : ''}
+                    ${cell.component_texts ? '' : ''}
                 </div>
                 <div class="card-footer">
                     <button class="btn btn-sm btn-outline-primary btn-edit">Edit</button>

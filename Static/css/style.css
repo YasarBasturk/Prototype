@@ -869,4 +869,18 @@ header {
 
 .flash-message {
     animation: fadeInOut 3s ease-in-out;
+}
+
+/* Styles for filtered grid view */
+.filtered-grid {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)) !important;
+    gap: 20px !important;
+}
+
+.filtered-grid > [class*="col-"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
 } 
