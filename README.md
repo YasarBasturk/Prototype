@@ -70,12 +70,13 @@ http://localhost:5000
 
 ## Processing Pipeline
 
-1. Image Upload: Save the original image
-2. Preprocessing: Enhance image quality
-3. OCR: Extract text using PaddleOCR
-4. Cell Detection: Detect table cells
-5. Merge/Split: Combine results and handle complex text layouts
-6. Display: Show results for review and editing
+    1. **Image Upload & Quality Assessment (IQA):** Receive image, check resolution, blur, brightness, and OCR confidence (EasyOCR). _(Only relevant for the mobile app path, not the main web app path)_
+    2. **Preprocessing:** Enhance image quality (Dewarp, CLAHE, Gamma). _(Used by the web app path)_
+    3. **Cell Detection:** Detect table cells (RT-DETR-L). _(Used by the web app path)_
+    4. **AI Model (OCR):** Extract text and structure using PaddleOCR PP-Structure. _(Used by the web app path)_
+    5. **Merge/Split:** Combine cell and OCR results, handle spanning text. _(Used by the web app path)_
+    6. **Display/Edit:** Show results for review and editing. _(Web app)_
+    7. **Save:** Store results in the database. _(Web app)_
 
 ## Technologies Used
 

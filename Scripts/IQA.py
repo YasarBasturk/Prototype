@@ -3,140 +3,138 @@ import numpy as np
 from PIL import Image
 import os
 import torch
-import torch.nn as nn
-from torchvision import transforms, models
-from torch.nn import functional as F
 import logging
+import easyocr
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class ImageQualityAssessor:
-    def __init__(self, min_resolution=(640, 480), 
-                 blur_threshold=50,  # Adjusted for iPhone camera
-                 brightness_range=(0.2, 0.9),  # Adjusted for iPhone camera
-                 aspect_ratio_tolerance=0.5):  # Increased to accept both portrait and landscape
-        
+    def __init__(self, min_resolution=(640, 480),
+                 blur_threshold=50,
+                 brightness_range=(0.2, 0.9),
+                 ocr_languages=['en'], # Language(s) for EasyOCR
+                 ocr_min_confidence=0.6): # Minimum average confidence to pass
+
         logger.info("Initializing ImageQualityAssessor...")
         self.min_resolution = min_resolution
         self.blur_threshold = blur_threshold
         self.brightness_range = brightness_range
-        self.aspect_ratio_tolerance = aspect_ratio_tolerance
-        
-        # Initialize device (GPU if available)
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        logger.info(f"Using device: {self.device}")
-        
-        # Load NIMA model
-        logger.info("Loading NIMA model...")
-        self.model = self._load_nima_model()
-        logger.info("NIMA model loaded successfully")
-        
-        # Define image preprocessing
-        self.preprocess = transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], 
-                               std=[0.229, 0.224, 0.225])
-        ])
-        
-    def _load_nima_model(self):
-        """Load NIMA model for image quality assessment."""
+        self.ocr_min_confidence = ocr_min_confidence
+
+        # Initialize EasyOCR Reader
+        # Use GPU if available, otherwise CPU
+        use_gpu = torch.cuda.is_available()
+        logger.info(f"Initializing EasyOCR Reader for languages: {ocr_languages} (GPU: {use_gpu})...")
         try:
-            # Load pre-trained ResNet50
-            model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-            
-            # Modify the last layer for quality prediction
-            num_features = model.fc.in_features
-            model.fc = nn.Sequential(
-                nn.Dropout(p=0.75),
-                nn.Linear(num_features, 10),
-                nn.Softmax(dim=1)
-            )
-            
-            # Move model to device
-            model = model.to(self.device)
-            model.eval()
-            
-            return model
+            # Note: First time running might download language models
+            self.reader = easyocr.Reader(ocr_languages, gpu=use_gpu)
+            logger.info("EasyOCR Reader initialized successfully.")
         except Exception as e:
-            logger.error(f"Error loading NIMA model: {str(e)}")
-            raise
-    
-    def _predict_quality_score(self, img):
-        """Predict quality score using NIMA model."""
+            logger.error(f"Error initializing EasyOCR Reader: {str(e)}")
+            # Fallback or re-raise depending on desired behavior
+            raise RuntimeError(f"Failed to initialize EasyOCR: {e}") from e
+
+    def _run_ocr(self, image_data):
+        """Run EasyOCR and return analysis."""
         try:
-            # Convert image to RGB if it has alpha channel
-            if img.mode == 'RGBA':
-                img = img.convert('RGB')
-            
-            # Convert PIL image to tensor and preprocess
-            img_tensor = self.preprocess(img).unsqueeze(0).to(self.device)
-            
-            with torch.no_grad():
-                # Get predictions
-                predictions = self.model(img_tensor)
-                
-                # Calculate mean score (1-10 scale)
-                scores = torch.arange(1, 11, dtype=torch.float32).to(self.device)
-                mean_score = torch.sum(predictions * scores, dim=1).item()
-                
-                # Calculate standard deviation
-                std_score = torch.sqrt(torch.sum(predictions * (scores - mean_score) ** 2, dim=1)).item()
-                
+            if image_data is None:
+                 logger.error("OCR Step: Received None as image data.")
+                 return {"error": "Received None as image data", "average_confidence": 0.0}
+
+            logger.info(f"OCR Step: Processing image data with shape: {image_data.shape}")
+            ocr_results = self.reader.readtext(image_data, detail=1)
+
+            total_confidence = 0
+            detected_texts = []
+
+            if ocr_results:
+                for (bbox, text, conf) in ocr_results:
+                    total_confidence += conf
+                    detected_texts.append(text)
+                average_confidence = total_confidence / len(ocr_results)
+            else:
+                average_confidence = 0.0 # No text found
+
+            logger.info(f"OCR Step: Processed image with avg confidence {average_confidence:.2f}")
             return {
-                "mean_score": mean_score,
-                "std_score": std_score,
-                "score_distribution": predictions.cpu().numpy()[0]
+                "average_confidence": average_confidence,
+                "texts": detected_texts
             }
+
         except Exception as e:
-            logger.error(f"Error in quality prediction: {str(e)}")
-            raise
-    
-    def assess_image(self, image_path):
-        """Assess an image for quality and return results with a verdict."""
-        logger.info(f"Assessing image: {image_path}")
+            logger.exception(f"Error during OCR processing with direct data: {str(e)}")
+            return {"error": str(e), "average_confidence": 0.0}
+
+    def assess_image(self, image_data):
+        """Assess an image using traditional checks and OCR quality based on image data."""
+        logger.info("Assessing image data...")
         try:
-            # Load image
-            logger.info("Loading image...")
-            cv_img = cv2.imread(image_path)
-            if cv_img is None:
-                logger.error(f"Could not load image at path: {image_path}")
-                return {"status": "error", "message": "Could not load image"}
-            
-            pil_img = Image.open(image_path)
-            logger.info(f"Image loaded successfully. Size: {pil_img.size}")
-            
+            # We already have image_data (NumPy array), no need to read from path
+            if image_data is None:
+                logger.error("assess_image received None as image data.")
+                return {"status": "error", "message": "Received invalid image data"}
+
+            # Use image_data (cv_img) directly for OpenCV checks
+            cv_img = image_data
+            logger.info(f"Image data received. Shape: {cv_img.shape}")
+
+            # Convert to PIL image for checks requiring it
+            try:
+                # OpenCV uses BGR, PIL uses RGB
+                pil_img = Image.fromarray(cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB))
+                logger.info(f"Converted to PIL Image. Size: {pil_img.size}")
+            except Exception as pil_e:
+                logger.error(f"Could not convert image data to PIL: {pil_e}")
+                return {"status": "error", "message": f"Could not convert image data to PIL: {pil_e}"}
+
             # Run traditional quality checks
             logger.info("Running traditional quality checks...")
             results = {
-                "resolution_check": self._check_resolution(pil_img),
-                "blur_check": self._check_blur(cv_img),
-                "brightness_check": self._check_brightness(cv_img),
-                "aspect_ratio_check": self._check_aspect_ratio(pil_img),
+                "resolution_check": self._check_resolution(pil_img), # Uses PIL
+                "blur_check": self._check_blur(cv_img), # Uses OpenCV
+                "brightness_check": self._check_brightness(cv_img), # Uses OpenCV
             }
-            
-            # Run ML-based quality assessment
-            logger.info("Running ML-based quality assessment...")
-            ml_results = self._predict_quality_score(pil_img)
-            results["ml_quality"] = {
-                "pass": ml_results["mean_score"] >= 5.0,  # Consider scores >= 5 as acceptable
-                "mean_score": ml_results["mean_score"],
-                "std_score": ml_results["std_score"],
-                "message": f"ML Quality Score: {ml_results['mean_score']:.2f} ± {ml_results['std_score']:.2f}"
-            }
-            
-            # Overall verdict (pass if all checks pass)
-            results["pass"] = all(check["pass"] for check in results.values() 
+
+            # Run OCR-based quality assessment
+            logger.info("Running OCR-based quality assessment...")
+            # Pass image_data (NumPy array) directly
+            ocr_analysis = self._run_ocr(image_data)
+
+            if "error" in ocr_analysis:
+                 logger.error(f"OCR failed: {ocr_analysis['error']}")
+                 results["ocr_quality"] = {
+                     "pass": False,
+                     "message": f"OCR processing failed: {ocr_analysis['error']}",
+                     "average_confidence": 0.0
+                 }
+            else:
+                avg_conf = ocr_analysis["average_confidence"]
+                conf_pass = avg_conf >= self.ocr_min_confidence
+                ocr_pass = conf_pass
+
+                message = f"OCR Quality: Avg Conf {avg_conf:.2f} ({'OK' if conf_pass else 'LOW'})"
+                if not ocr_pass:
+                    message = f"Confidence too low ({avg_conf:.2f})"
+
+                results["ocr_quality"] = {
+                    "pass": ocr_pass,
+                    "average_confidence": avg_conf,
+                    "min_confidence_required": self.ocr_min_confidence,
+                    "message": message
+                }
+
+            # Overall verdict
+            results["pass"] = all(check["pass"] for check_name, check in results.items()
                                  if isinstance(check, dict) and "pass" in check)
-            
+
             logger.info("Assessment completed successfully")
             return results
-            
+
         except Exception as e:
-            logger.error(f"Error during assessment: {str(e)}")
-            return {"status": "error", "message": str(e)}
+            logger.exception(f"Unhandled error during assessment with direct data: {str(e)}")
+            return {"status": "error", "message": f"Assessment failed: {str(e)}"}
     
     def _check_resolution(self, img):
         """Check if image resolution meets minimum requirements."""
@@ -182,32 +180,6 @@ class ImageQualityAssessor:
             "message": "Brightness OK" if passes else 
                        "Image too dark" if brightness < min_bright else "Image too bright"
         }
-    
-    def _check_aspect_ratio(self, img):
-        """Check if image aspect ratio is within normal range for iPhone photos."""
-        width, height = img.size
-        aspect = width / height
-        
-        # Accept both portrait (3:4) and landscape (4:3) orientations
-        std_aspect_portrait = 3/4  # iPhone portrait mode
-        std_aspect_landscape = 4/3  # iPhone landscape mode
-        
-        # Calculate deviation from both standard ratios
-        deviation_portrait = abs(aspect - std_aspect_portrait) / std_aspect_portrait
-        deviation_landscape = abs(aspect - std_aspect_landscape) / std_aspect_landscape
-        
-        # Pass if close to either standard ratio
-        passes = (deviation_portrait <= self.aspect_ratio_tolerance or 
-                 deviation_landscape <= self.aspect_ratio_tolerance)
-        
-        return {
-            "pass": passes,
-            "value": aspect,
-            "deviation": min(deviation_portrait, deviation_landscape),
-            "tolerance": self.aspect_ratio_tolerance,
-            "message": "Aspect ratio OK" if passes else "Unusual aspect ratio detected",
-            "orientation": "portrait" if deviation_portrait < deviation_landscape else "landscape"
-        }
 
 # Usage example
 if __name__ == "__main__":
@@ -220,7 +192,7 @@ if __name__ == "__main__":
     
     if os.path.exists(sample_path):
         logger.info("Image file exists")
-        results = assessor.assess_image(sample_path)
+        results = assessor.assess_image(cv2.imread(sample_path))
         
         print("\nImage Quality Assessment Results:")
         print(f"Overall verdict: {'PASS' if results.get('pass', False) else 'FAIL'}")

@@ -4,6 +4,9 @@ from werkzeug.utils import secure_filename
 import traceback
 import sys
 import json
+import numpy as np
+import collections.abc
+import cv2
 
 # Add the parent directory to Python path
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -13,6 +16,7 @@ sys.path.append(parent_dir)
 from Scripts.image_preprocess import preprocess_image
 from Scripts.cell_processing import run_cell_detection
 from Scripts.ai_processing import ai_processing
+from Scripts.IQA import ImageQualityAssessor
 
 # Import local modules with proper package paths
 from server.merge_split_processing import merge_split_processing
@@ -408,3 +412,57 @@ def find_json(prefix):
     except Exception as e:
         print(f"Error finding JSON files: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+# Helper function to convert NumPy types to standard Python types
+def convert_numpy_types(obj):
+    if isinstance(obj, np.bool_):
+        return bool(obj)
+    if isinstance(obj, np.integer):
+        return int(obj)
+    if isinstance(obj, np.floating):
+        return float(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, collections.abc.Mapping):
+        return {k: convert_numpy_types(v) for k, v in obj.items()}
+    if isinstance(obj, collections.abc.Sequence) and not isinstance(obj, (str, bytes)):
+        return [convert_numpy_types(item) for item in obj]
+    return obj
+
+@app.route('/assess_quality', methods=['POST'])
+def assess_quality():
+    if 'file' not in request.files:
+        return jsonify({'status': 'error', 'error': 'No file provided'}), 400
+
+    file = request.files['file']
+    if not file or not file.filename:
+        return jsonify({'status': 'error', 'error': 'Invalid file upload'}), 400
+
+    try:
+        # Read file content as bytes
+        img_bytes = file.read()
+        # Decode bytes into an OpenCV image (NumPy array)
+        # cv2.IMREAD_COLOR ensures it's read as a 3-channel color image
+        img_data = cv2.imdecode(np.frombuffer(img_bytes, np.uint8), cv2.IMREAD_COLOR)
+
+        if img_data is None:
+             return jsonify({'status': 'error', 'error': 'Could not decode image data from upload'}), 400
+
+        # Run quality assessment with image data instead of path
+        assessor = ImageQualityAssessor()
+        # ! IMPORTANT: assess_image needs to be changed to accept data !
+        raw_results = assessor.assess_image(img_data) # Send NumPy array
+
+        # Convert NumPy types (this part is still necessary)
+        cleaned_results = convert_numpy_types(raw_results)
+
+        return jsonify(cleaned_results)
+
+    except Exception as e:
+         # Log the error
+         print(f"Error during quality assessment (direct data): {str(e)}")
+         # Consider logging traceback here as well
+         import traceback
+         print(traceback.format_exc())
+         return jsonify({'status': 'error', 'message': f'Error processing image: {str(e)}'}), 500
+
