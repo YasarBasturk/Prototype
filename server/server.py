@@ -37,7 +37,7 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
 app.config.update(
     UPLOAD_FOLDER=UPLOAD_FOLDER,
-    MAX_CONTENT_LENGTH=48 * 1024 * 1024  # 48MB max file size
+    MAX_CONTENT_LENGTH=60 * 1024 * 1024  # 48MB max file size
 )
 
 # Create necessary directories

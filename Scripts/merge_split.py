@@ -19,9 +19,7 @@ def save_json_file(data, file_path):
 
 def text_region_to_polygon(text_region):
     """Convert text region coordinates to a Polygon"""
-    # Ensure we have at least 3 points for a valid polygon
     if len(text_region) < 3:
-        # If only 2 points are provided (diagonal corners), create a rectangle
         if len(text_region) == 2:
             x1, y1 = text_region[0]
             x2, y2 = text_region[1]
@@ -55,23 +53,33 @@ def get_overlap_percentage(text_polygon, cell_polygon):
         return intersection_area / text_polygon.area
     return 0.0
 
-def text_fits_pattern(text, pattern_type="numeric_sequence"):
-    """Check if text fits a specific pattern"""
+def text_fits_pattern(text, pattern_type="long_text_general"):
+    """Check if text fits a specific pattern. For now, numeric_sequence is kept for potential specific use cases, but general splitting is prioritized."""
     if pattern_type == "numeric_sequence":
-        # Pattern for long numeric sequences (possibly spanning multiple cells)
+        # Bevaret hvis specifik numerisk logik ønskes et andet sted, men ikke primær for splitting
         return bool(re.match(r"^\d{10,}$", text))
     elif pattern_type == "date":
-        # Pattern for dates
         return bool(re.match(r"\d{1,2}/\d{1,2}/\d{2,4}", text))
-    return False
+    # For generel splitting baseret på længde, er denne funktion mindre relevant nu.
+    return False # Default til False hvis mønster ikke genkendes
 
-def should_split_text(text_item, cells):
-    """Determine if a text item should be split across multiple cells"""
-    # Check if text is unusually long
-    if len(text_item.get('text', '')) > 15:
-        # Check if text fits a known pattern for data that often spans cells
-        if text_fits_pattern(text_item.get('text', '')):
-            return True
+def should_split_text(text_item, cells_overlapped_count):
+    """Determine if a text item should be considered for splitting based on length and if it overlaps multiple cells."""
+    text_length_threshold = 10 # Kan justeres (ændret fra 15)
+    text = text_item.get('text', '')
+
+    if len(text) > text_length_threshold and cells_overlapped_count > 1:
+        # Teksten er lang nok OG den overlapper med mere end én celle
+        # Vi behøver ikke et specifikt mønster (som kun tal) for at overveje splitting
+        return True
+    
+    # Ny tilføjelse: Overvej også splitting for den positionelle tildeling, hvis teksten er lang
+    # Dette er for tilfældet hvor `cells_overlapped_count` er 0 (fra `unassigned_text` logikken)
+    if len(text) > text_length_threshold and cells_overlapped_count == 0:
+         # Dette er til den del af koden, der kalder should_split_text med `overlapping_cells=[]` (reelt `cells_overlapped_count=0`)
+         # for at se om en u-tildelt tekst BLOT PGA SIN LÆNGDE skal forsøges positionelt splittet.
+         return True
+
     return False
 
 def extract_text_items(ocr_data):
@@ -132,46 +140,64 @@ def extract_text_items(ocr_data):
     return ocr_data.get('text_regions', [])
 
 def split_text_for_cells(text_item, overlapping_cells):
-    """Split text across multiple cells based on overlap and position"""
+    """
+    Split text across multiple cells based on overlap and position.
+    Splitting er nu mere generel og ikke kun for numeriske sekvenser.
+    """
     text = text_item.get('text', '')
     text_region = text_item.get('text_region', [])
     confidence = text_item.get('confidence', 0.0)
     
-    # If it's a numeric sequence, try to split it evenly among cells
-    if text_fits_pattern(text, "numeric_sequence"):
-        # Sort cells from left to right
+    if not overlapping_cells: # Safety check
+        return []
+
+    # Hvis der er mere end én overlappende celle, forsøges splitting.
+    # Den tidligere betingelse om text_fits_pattern(text, "numeric_sequence") er fjernet herfra
+    # for at gøre splitting mere generel.
+    if len(overlapping_cells) > 1:
+        # Sort cells from left to right (eller top-til-bund, afhængig af forventet tekstflow for spændende celler)
+        # For nu, lad os beholde sortering fra venstre mod højre. Kan justeres hvis nødvendigt.
         overlapping_cells.sort(key=lambda c: c['polygon'].bounds[0])
         
         # Calculate approximate characters per cell
-        chars_per_cell = len(text) // len(overlapping_cells)
+        # Denne simple fordeling kan være naiv for komplekse layouts, men er et udgangspunkt.
+        num_cells_to_split_over = len(overlapping_cells)
+        chars_per_cell = len(text) // num_cells_to_split_over if num_cells_to_split_over > 0 else len(text)
         
         split_results = []
-        for i, cell in enumerate(overlapping_cells):
-            start_idx = i * chars_per_cell
-            end_idx = (i + 1) * chars_per_cell if i < len(overlapping_cells) - 1 else len(text)
+        current_pos = 0
+        for i, cell_info_dict in enumerate(overlapping_cells):
+            # Den 'cell' vi vil tildele til, er inde i 'cell_info_dict'
+            cell_to_assign = cell_info_dict['cell_data'] # Antager 'cell_data' nøglen fra `merge_cell_and_text`
             
-            split_text = text[start_idx:end_idx]
-            if split_text:
-                # Create a relative text region based on the original
-                # This is approximate - in a production system you'd want more precise calculation
+            # Hvis det er den sidste celle, tag resten af teksten
+            if i == num_cells_to_split_over - 1:
+                split_text_segment = text[current_pos:]
+            else:
+                split_text_segment = text[current_pos : current_pos + chars_per_cell]
+            
+            if split_text_segment: # Kun tilføj hvis der er tekst
                 split_results.append({
-                    'cell': cell,
-                    'text': split_text,
-                    'confidence': confidence,
-                    'text_region': text_region  # Using original text region as an approximation
+                    'cell': cell_to_assign, # Skal være selve celle-objektet der kan modtage tekst
+                    'text': split_text_segment,
+                    'confidence': confidence, # Bevar original konfidens for alle segmenter
+                    'text_region': text_region,  # Bevar original text_region, da det er svært at splitte præcist
+                    'overlap': cell_info_dict.get('overlap', 0) # Bevar overlap info hvis det findes
                 })
+            current_pos += len(split_text_segment)
+            if current_pos >= len(text):
+                break # Al tekst er fordelt
                 
         return split_results
     
-    # For non-pattern text with multiple overlapping cells, 
-    # assign to the cell with the largest overlap
+    # Hvis kun én overlappende celle (eller logikken førte hertil med én celle), tildel hele teksten.
+    # (Denne del bevares for enkelt-celle overlap eller som fallback)
     return [{
-        'cell': max(overlapping_cells, key=lambda c: get_overlap_percentage(
-            text_region_to_polygon(text_region), c['polygon']
-        )),
+        'cell': overlapping_cells[0]['cell_data'], # Antager 'cell_data' nøglen
         'text': text,
         'confidence': confidence,
-        'text_region': text_region
+        'text_region': text_region,
+        'overlap': overlapping_cells[0].get('overlap', 0)
     }]
 
 def merge_cell_and_text(cell_data, ocr_data, output_path, overlap_threshold=0.5, min_overlap_for_spanning=0.1):
@@ -185,13 +211,11 @@ def merge_cell_and_text(cell_data, ocr_data, output_path, overlap_threshold=0.5,
         overlap_threshold (float): Threshold for text-cell overlap percentage
         min_overlap_for_spanning (float): Minimum overlap to consider a cell for spanning text
     """
-    # Extract cells and text items
     cells = cell_data.get('boxes', [])
     text_items = extract_text_items(ocr_data)
     
     print(f"Found {len(cells)} cells and {len(text_items)} text items")
     
-    # Convert cells to polygons for spatial operations
     cell_polygons = []
     for i, cell in enumerate(cells):
         try:
@@ -207,167 +231,180 @@ def merge_cell_and_text(cell_data, ocr_data, output_path, overlap_threshold=0.5,
         except Exception as e:
             print(f"Error processing cell {i}: {e}")
     
-    # Process each text item
     unassigned_text = []
     assigned_text_ids = set()
-    spanning_text_assignments = []  # Track text that spans multiple cells
+    spanning_text_assignments = []
     
     for i, text_item in enumerate(text_items):
-        if 'text_region' not in text_item:
+        if 'text_region' not in text_item or not text_item.get('text', '').strip(): # Spring over hvis ingen text_region eller tom tekst
             continue
             
         try:
-            # Convert text region to polygon
             text_polygon = text_region_to_polygon(text_item['text_region'])
             if not text_polygon:
                 continue
             
-            # Calculate text dimensions to identify potentially spanning text
             text_width, text_height = get_text_dimensions(text_item['text_region'])
             
-            # Find all cells that have some overlap with this text
-            overlapping_cells = []
-            for cell_data in cell_polygons:
-                overlap = get_overlap_percentage(text_polygon, cell_data['polygon'])
-                if overlap >= min_overlap_for_spanning:
-                    overlapping_cells.append({
-                        'cell_data': cell_data, 
+            overlapping_cells_with_details = [] # Skal indeholde dicts med 'cell_data', 'overlap', 'polygon'
+            for cell_poly_data in cell_polygons:
+                overlap = get_overlap_percentage(text_polygon, cell_poly_data['polygon'])
+                if overlap >= min_overlap_for_spanning: # Brug min_overlap_for_spanning her for at samle kandidater
+                    overlapping_cells_with_details.append({
+                        'cell_data': cell_poly_data, 
                         'overlap': overlap,
-                        'polygon': cell_data['polygon']
+                        'polygon': cell_poly_data['polygon'] # Bruges til sortering i split_text_for_cells
                     })
             
-            # Check if this text should be considered as spanning multiple cells
-            if len(overlapping_cells) > 1 and should_split_text(text_item, overlapping_cells):
-                # Split text across multiple cells
+            # Brug den modificerede should_split_text
+            # Argumentet er nu antallet af celler, teksten overlapper med (over min_overlap_for_spanning)
+            if should_split_text(text_item, len(overlapping_cells_with_details)):
                 split_assignments = split_text_for_cells(
                     text_item, 
-                    overlapping_cells
+                    overlapping_cells_with_details # Send listen af dicts
                 )
                 
-                for assignment in split_assignments:
-                    cell = assignment['cell']['cell_data']
-                    cell['text_items'].append({
-                        'id': i,
-                        'text': assignment['text'],
-                        'confidence': assignment['confidence'],
-                        'overlap': assignment['cell']['overlap'],
-                        'text_region': assignment['text_region'],
-                        'is_split': True,
-                        'original_text': text_item.get('text', '')
-                    })
-                
-                spanning_text_assignments.append({
-                    'text_id': i,
-                    'text': text_item.get('text', ''),
-                    'confidence': text_item.get('confidence', 0.0),
-                    'assigned_to_cells': [cell['cell_data']['id'] for cell in overlapping_cells],
-                    'split_texts': [assignment['text'] for assignment in split_assignments]
-                })
-                
-                assigned_text_ids.add(i)
-                continue
-                
-            # Standard assignment - find best single cell
-            best_cell = None
-            best_overlap = 0
+                if split_assignments: # Kun hvis der faktisk blev lavet assignments
+                    assigned_this_item = False
+                    original_text_for_span_item = text_item.get('text', '')
+                    cells_assigned_to_ids = []
+                    split_texts_for_span_item = []
+
+                    for assignment in split_assignments:
+                        # 'cell' fra split_assignments er 'cell_data' objektet
+                        target_cell_data = assignment['cell'] 
+                        target_cell_data['text_items'].append({
+                            'id': i, # ID for det oprindelige text_item
+                            'text': assignment['text'],
+                            'confidence': assignment['confidence'],
+                            'overlap': assignment['overlap'],
+                            'text_region': assignment['text_region'],
+                            'is_split': True,
+                            'original_text': original_text_for_span_item
+                        })
+                        assigned_this_item = True
+                        cells_assigned_to_ids.append(target_cell_data['id'])
+                        split_texts_for_span_item.append(assignment['text'])
+                    
+                    if assigned_this_item:
+                        spanning_text_assignments.append({
+                            'text_id': i,
+                            'text': original_text_for_span_item,
+                            'confidence': text_item.get('confidence', 0.0),
+                            'assigned_to_cells': list(set(cells_assigned_to_ids)), # unikke celle IDs
+                            'split_texts': split_texts_for_span_item
+                        })
+                        assigned_text_ids.add(i)
+                        continue # Gå til næste text_item
+                # Hvis split_assignments var tom, eller hvis logikken skal fortsætte til enkelt tildeling
+                # (Dette 'else' er måske ikke nødvendigt hvis 'continue' altid rammes ved succesfuld split)
+
+            # Standard enkelt-celle tildeling (hvis ikke splittet, eller hvis splitting mislykkedes)
+            # Genberegn bedste overlap baseret på den strengere `overlap_threshold` for enkelt tildeling
+            best_single_cell = None
+            highest_overlap_for_single_assignment = 0.0
             
-            for cell_data in cell_polygons:
-                overlap = get_overlap_percentage(text_polygon, cell_data['polygon'])
-                if overlap > best_overlap:
-                    best_overlap = overlap
-                    best_cell = cell_data
+            for cell_data_for_single in cell_polygons: # Iterer over de oprindelige cell_polygons
+                overlap_for_single = get_overlap_percentage(text_polygon, cell_data_for_single['polygon'])
+                if overlap_for_single > highest_overlap_for_single_assignment:
+                    highest_overlap_for_single_assignment = overlap_for_single
+                    best_single_cell = cell_data_for_single
             
-            # Assign text to cell if overlap meets threshold
-            if best_cell and best_overlap >= overlap_threshold:
-                best_cell['text_items'].append({
+            if best_single_cell and highest_overlap_for_single_assignment >= overlap_threshold:
+                best_single_cell['text_items'].append({
                     'id': i,
                     'text': text_item.get('text', ''),
                     'confidence': text_item.get('confidence', 0.0),
-                    'overlap': best_overlap,
-                    'text_region': text_item['text_region']
+                    'overlap': highest_overlap_for_single_assignment,
+                    'text_region': text_item['text_region'],
+                    'is_split': False # Ikke splittet i dette tilfælde
                 })
                 assigned_text_ids.add(i)
             else:
-                # Try a rule-based approach for unassigned text that looks like it might span cells
-                if should_split_text(text_item, []):
-                    # Find cells that this text might be spanning based on position
+                # Forsøg på positionel tildeling for u-tildelt tekst (hvis den er lang nok)
+                # Her bruges should_split_text med cells_overlapped_count = 0 for at tjekke tekstlængde
+                if should_split_text(text_item, 0): 
                     text_center = get_text_center(text_item['text_region'])
                     y_position = text_center[1]
+                    y_tolerance = text_height * 2 
                     
-                    # Find cells in approximately the same row (based on y-coordinate)
-                    row_cells = []
-                    y_tolerance = text_height * 2  # Allow some vertical tolerance
-                    
-                    for cell_data in cell_polygons:
-                        cell_bounds = cell_data['polygon'].bounds  # (minx, miny, maxx, maxy)
+                    row_cells_for_positional = [] # Skal være en liste af dicts som overlapping_cells_with_details
+                    for cell_poly_data_pos in cell_polygons:
+                        cell_bounds = cell_poly_data_pos['polygon'].bounds
                         cell_y_center = (cell_bounds[1] + cell_bounds[3]) / 2
-                        
                         if abs(cell_y_center - y_position) <= y_tolerance:
-                            row_cells.append({
-                                'cell_data': cell_data,
-                                'polygon': cell_data['polygon'],
-                                'overlap': 0  # No direct overlap
+                            row_cells_for_positional.append({
+                                'cell_data': cell_poly_data_pos,
+                                'polygon': cell_poly_data_pos['polygon'],
+                                'overlap': 0 # Ingen direkte overlap
                             })
                     
-                    if len(row_cells) > 0:
-                        # Sort cells from left to right
-                        row_cells.sort(key=lambda c: c['polygon'].bounds[0])
+                    if row_cells_for_positional: # Kun hvis der er celler på samme række
+                        # Sorter fra venstre mod højre
+                        row_cells_for_positional.sort(key=lambda c: c['polygon'].bounds[0])
                         
-                        # Split text across row cells
-                        split_assignments = split_text_for_cells(text_item, row_cells)
+                        positional_split_assignments = split_text_for_cells(text_item, row_cells_for_positional)
                         
-                        for assignment in split_assignments:
-                            cell = assignment['cell']['cell_data']
-                            cell['text_items'].append({
-                                'id': i,
-                                'text': assignment['text'],
-                                'confidence': assignment['confidence'],
-                                'overlap': 0,  # No direct overlap
-                                'text_region': assignment['text_region'],
-                                'is_split': True,
-                                'original_text': text_item.get('text', ''),
-                                'is_positional_assignment': True
-                            })
-                        
-                        spanning_text_assignments.append({
-                            'text_id': i,
-                            'text': text_item.get('text', ''),
-                            'confidence': text_item.get('confidence', 0.0),
-                            'assigned_to_cells': [cell['cell_data']['id'] for cell in row_cells],
-                            'split_texts': [assignment['text'] for assignment in split_assignments],
-                            'assignment_method': 'positional'
-                        })
-                        
-                        assigned_text_ids.add(i)
-                        continue
+                        if positional_split_assignments:
+                            assigned_this_item_positionally = False
+                            original_text_for_pos_span = text_item.get('text', '')
+                            pos_cells_assigned_to_ids = []
+                            pos_split_texts = []
+
+                            for assignment in positional_split_assignments:
+                                target_cell_data_pos = assignment['cell']
+                                target_cell_data_pos['text_items'].append({
+                                    'id': i,
+                                    'text': assignment['text'],
+                                    'confidence': assignment['confidence'],
+                                    'overlap': 0, 
+                                    'text_region': assignment['text_region'],
+                                    'is_split': True,
+                                    'original_text': original_text_for_pos_span,
+                                    'is_positional_assignment': True
+                                })
+                                assigned_this_item_positionally = True
+                                pos_cells_assigned_to_ids.append(target_cell_data_pos['id'])
+                                pos_split_texts.append(assignment['text'])
+
+                            if assigned_this_item_positionally:
+                                spanning_text_assignments.append({
+                                    'text_id': i,
+                                    'text': original_text_for_pos_span,
+                                    'confidence': text_item.get('confidence', 0.0),
+                                    'assigned_to_cells': list(set(pos_cells_assigned_to_ids)),
+                                    'split_texts': pos_split_texts,
+                                    'assignment_method': 'positional'
+                                })
+                                assigned_text_ids.add(i)
+                                continue # Gå til næste text_item
                 
-                # Still unassigned even after trying positional assignment
-                unassigned_text.append({
-                    'id': i,
-                    'text': text_item.get('text', ''),
-                    'confidence': text_item.get('confidence', 0.0),
-                    'text_region': text_item['text_region']
-                })
+                # Hvis stadig ikke tildelt, så er den unassigned
+                if i not in assigned_text_ids:
+                    unassigned_text.append({
+                        'id': i, # Korrekt ID for det oprindelige text_item
+                        'text': text_item.get('text', ''),
+                        'confidence': text_item.get('confidence', 0.0),
+                        'text_region': text_item['text_region']
+                    })
                 
         except Exception as e:
-            print(f"Error processing text item {i}: {e}")
+            print(f"Error processing text item {i} ('{text_item.get('text', '')[:30]}...'): {e}")
+            import traceback
+            traceback.print_exc() # Print fuld traceback for fejlfinding
     
     # Process each cell to combine text
     for cell_data in cell_polygons:
         if cell_data['text_items']:
-            # Sort text by vertical position for natural reading order
             cell_data['text_items'].sort(key=lambda x: get_text_center(x['text_region'])[1])
-            
-            # Combine text and calculate average confidence
-            texts = [item['text'] for item in cell_data['text_items'] if item['text']]
-            confidences = [item['confidence'] for item in cell_data['text_items'] if item['confidence'] > 0]
-            
-            cell_data['combined_text'] = " ".join(texts)
+            texts = [item['text'] for item in cell_data['text_items'] if item.get('text')] # Tjek om 'text' eksisterer
+            confidences = [item['confidence'] for item in cell_data['text_items'] if isinstance(item.get('confidence'), (int,float)) and item['confidence'] > 0]
+            cell_data['combined_text'] = " ".join(texts).strip()
             cell_data['confidence'] = sum(confidences) / len(confidences) if confidences else 0.0
     
     # Prepare output data
     output_data = {
-        'image_path': cell_data.get('input_path', ocr_data.get('input_path', '')),
+        'image_path': cell_data.get('input_path', ocr_data.get('input_path', '')), # Fejl her, cell_data er sidste i loop
         'cells_with_text': [
             {
                 'cell_id': c['id'],
@@ -381,7 +418,8 @@ def merge_cell_and_text(cell_data, ocr_data, output_path, overlap_threshold=0.5,
                         'confidence': item['confidence'],
                         'text_region': item['text_region'],
                         'is_split': item.get('is_split', False),
-                        'original_text': item.get('original_text', item['text']) if item.get('is_split', False) else None
+                        'original_text': item.get('original_text', item['text']) if item.get('is_split', False) else None,
+                        'is_positional_assignment': item.get('is_positional_assignment', False)
                     } for item in c['text_items']
                 ]
             } for c in cell_polygons if c['combined_text']
@@ -393,9 +431,9 @@ def merge_cell_and_text(cell_data, ocr_data, output_path, overlap_threshold=0.5,
                 'cell_score': c['cell_info'].get('score', 0.0)
             } for c in cell_polygons if not c['combined_text']
         ],
-        'unassigned_text': [
+        'unassigned_text': [ # Sikrer at unassigned_text har de korrekte nøgler
             {
-                'text_id': t['id'],
+                'text_id': t['id'], # Var 'id', skal være 'text_id' for konsistens med metadata
                 'text': t['text'],
                 'confidence': t['confidence'],
                 'text_region': t['text_region']
@@ -404,16 +442,23 @@ def merge_cell_and_text(cell_data, ocr_data, output_path, overlap_threshold=0.5,
         'spanning_text': spanning_text_assignments,
         'metadata': {
             'total_cells': len(cells),
-            'total_text_items': len(text_items),
-            'assigned_text_items': len(assigned_text_ids),
+            'total_text_items': len(text_items), # Antal oprindelige tekst items
+            'assigned_text_items': len(assigned_text_ids), # Antal *oprindelige* tekst items der blev tildelt (enten som helhed eller splittet)
             'cells_with_text': len([c for c in cell_polygons if c['combined_text']]),
             'empty_cells': len([c for c in cell_polygons if not c['combined_text']]),
-            'unassigned_text': len(unassigned_text),
-            'spanning_text_items': len(spanning_text_assignments)
+            'unassigned_text': len(unassigned_text), # Antal *oprindelige* tekst items der forblev u-tildelt
+            'spanning_text_items': len(spanning_text_assignments) # Antal *oprindelige* tekst items der blev identificeret som spændende
         }
     }
-    
-    # Save the combined results
+    # Rettelse for image_path i output_data
+    if cell_data: # Check om cell_data er tilgængelig (dvs. der var celler)
+         output_data['image_path'] = cell_data.get('input_path', ocr_data.get('input_path', ''))
+    elif ocr_data:
+         output_data['image_path'] = ocr_data.get('input_path', '')
+    else:
+         output_data['image_path'] = ''
+
+
     save_json_file(output_data, output_path)
     
     return output_data
@@ -448,32 +493,34 @@ def process_document(cell_json_path, ocr_json_path, output_dir="combined_results
     
     # Load input JSON files
     try:
-        cell_data = load_json_file(cell_json_path)
-        print(f"Loaded cell data with {len(cell_data.get('boxes', []))} cells")
+        cell_data_loaded = load_json_file(cell_json_path) # Ændret variabelnavn for at undgå scope konflikt
+        print(f"Loaded cell data with {len(cell_data_loaded.get('boxes', []))} cells")
     except Exception as e:
         print(f"Error loading cell data: {e}")
         return None
         
     try:
-        ocr_data = load_json_file(ocr_json_path)
-        text_items = extract_text_items(ocr_data)
-        print(f"Loaded OCR data with {len(text_items)} text items")
+        ocr_data_loaded = load_json_file(ocr_json_path) # Ændret variabelnavn
+        # Bevar den oprindelige ocr_data_loaded til metadata, hvis extract_text_items modificerer den
+        text_items_count_check = extract_text_items(ocr_data_loaded) 
+        print(f"Loaded OCR data with {len(text_items_count_check)} text items")
     except Exception as e:
         print(f"Error loading OCR data: {e}")
         return None
     
     # Derive image path if not provided
-    if not image_path:
+    current_image_path = image_path # Brug et nyt variabelnavn
+    if not current_image_path:
         # Try to get it from the JSONs
-        image_path = cell_data.get('input_path', ocr_data.get('input_path', ''))
-        if not os.path.exists(image_path):
-            print(f"Warning: Image path '{image_path}' not found.")
+        current_image_path = cell_data_loaded.get('input_path', ocr_data_loaded.get('input_path', ''))
+        if not os.path.exists(current_image_path):
+            print(f"Warning: Image path '{current_image_path}' not found.")
     
     # Merge cell and text data
     output_json_path = os.path.join(output_dir, f"{base_name}_combined_with_spanning.json")
     merged_data = merge_cell_and_text(
-        cell_data, 
-        ocr_data, 
+        cell_data_loaded, 
+        ocr_data_loaded, 
         output_json_path, 
         overlap_threshold,
         min_overlap_for_spanning
@@ -486,10 +533,10 @@ def process_document(cell_json_path, ocr_json_path, output_dir="combined_results
     # Create visualization
     visualization_path = None
     try:
-        if image_path and os.path.exists(image_path):
+        if current_image_path and os.path.exists(current_image_path):
             vis_path = os.path.join(output_dir, f"{base_name}_visualization_with_spanning.jpg")
             visualization_path = create_visualization_with_spanning(
-                cell_data, ocr_data, merged_data, vis_path, image_path
+                cell_data_loaded, ocr_data_loaded, merged_data, vis_path, current_image_path
             )
             
             if visualization_path:
@@ -517,7 +564,7 @@ def process_document(cell_json_path, ocr_json_path, output_dir="combined_results
     
     return merged_data
 
-def create_visualization_with_spanning(cell_data, ocr_data, merged_data, output_path, original_image_path):
+def create_visualization_with_spanning(cell_data_vis, ocr_data_vis, merged_data, output_path, original_image_path_vis): # Ændret param navne
     """Create an enhanced visualization of the merged data, highlighting spanning text"""
     import cv2
     
@@ -525,13 +572,13 @@ def create_visualization_with_spanning(cell_data, ocr_data, merged_data, output_
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     
     print(f"Creating visualization with spanning at: {output_path}")
-    print(f"Using original image: {original_image_path}")
+    print(f"Using original image: {original_image_path_vis}")
     
     # Load original image
-    img = cv2.imread(original_image_path)
+    img = cv2.imread(original_image_path_vis)
     if img is None:
-        print(f"Could not load image: {original_image_path}")
-        return
+        print(f"Could not load image: {original_image_path_vis}")
+        return None # Returner None hvis billedet ikke kan loades
         
     # Create a copy for visualization
     visualization = img.copy()
@@ -553,7 +600,7 @@ def create_visualization_with_spanning(cell_data, ocr_data, merged_data, output_
         # Truncate if too long
         display_text = text[:20] + "..." if len(text) > 20 else text
         cv2.putText(visualization, display_text, (x1, y1-5), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1) # Farve for tekstlabel ændret til rød for synlighed
     
     # Draw empty cells in red
     for cell in merged_data['empty_cells']:
@@ -562,15 +609,17 @@ def create_visualization_with_spanning(cell_data, ocr_data, merged_data, output_
         cv2.rectangle(visualization, (x1, y1), (x2, y2), (0, 0, 255), 1)
     
     # Draw unassigned text regions in blue
-    for text_item in merged_data['unassigned_text']:
-        region = text_item['text_region']
-        points = np.array(region, dtype=np.int32)
-        cv2.polylines(visualization, [points], True, (255, 0, 0), 2)
-        
-        # Add unassigned text label
-        x, y = points[0]
-        cv2.putText(visualization, text_item['text'][:10], (x, y-5), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 0), 1)
+    if 'unassigned_text' in merged_data: # Tjek om nøglen findes
+        for text_item in merged_data['unassigned_text']:
+            if 'text_region' in text_item and text_item['text_region']: # Tjek om text_region eksisterer og ikke er tom
+                region = text_item['text_region']
+                points = np.array(region, dtype=np.int32)
+                cv2.polylines(visualization, [points], True, (255, 0, 0), 2)
+                
+                # Add unassigned text label
+                x, y = points[0]
+                cv2.putText(visualization, text_item.get('text', '')[:10], (x, y-5), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 0), 1)
     
     # Highlight spanning text with yellow lines connecting split parts
     if 'spanning_text' in merged_data:
@@ -582,9 +631,9 @@ def create_visualization_with_spanning(cell_data, ocr_data, merged_data, output_
             centers = []
             for cell_id in cell_ids:
                 # Find the cell with this ID
-                for cell in merged_data['cells_with_text']:
-                    if cell['cell_id'] == cell_id:
-                        coords = cell['coordinates']
+                for cell_obj in merged_data['cells_with_text']: # Brug 'cell_obj' for at undgå navnekonflikt
+                    if cell_obj['cell_id'] == cell_id:
+                        coords = cell_obj['coordinates']
                         center_x = (coords[0] + coords[2]) // 2
                         center_y = (coords[1] + coords[3]) // 2
                         centers.append((int(center_x), int(center_y)))
@@ -592,8 +641,8 @@ def create_visualization_with_spanning(cell_data, ocr_data, merged_data, output_
             
             # Draw lines connecting cells with this spanning text
             if len(centers) > 1:
-                for i in range(len(centers) - 1):
-                    cv2.line(visualization, centers[i], centers[i+1], (0, 255, 255), 2)
+                for i_line in range(len(centers) - 1): # Brug 'i_line' for at undgå navnekonflikt
+                    cv2.line(visualization, centers[i_line], centers[i_line+1], (0, 255, 255), 2) # Gul
                 
                 # Add spanning text label at the midpoint
                 mid_idx = len(centers) // 2
@@ -606,34 +655,57 @@ def create_visualization_with_spanning(cell_data, ocr_data, merged_data, output_
                 original_text = span_item['text']
                 display_text = original_text[:15] + "..." if len(original_text) > 15 else original_text
                 cv2.putText(visualization, display_text, (mid_x - 50, label_y), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 200, 200), 2)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 200, 200), 2) # Mørkere gul/orange
     
     # Save visualization
     try:
         print(f"Saving visualization to: {output_path}")
-        cv2.imwrite(output_path, visualization)
-        if os.path.exists(output_path):
+        save_success = cv2.imwrite(output_path, visualization) # Gem returværdi
+        if save_success and os.path.exists(output_path):
             print(f"✓ Visualization saved successfully at: {output_path}")
             print(f"  File size: {os.path.getsize(output_path)} bytes")
         else:
-            print(f"✗ Failed to save visualization - file does not exist after save attempt")
+            print(f"✗ Failed to save visualization (imwrite returned {save_success} or file does not exist)")
     except Exception as e:
         print(f"Error saving visualization: {e}")
+        import traceback
+        traceback.print_exc()
+        return None # Returner None ved fejl
     
     # Return path if successful
     return output_path if os.path.exists(output_path) else None
 
-# Example usage
+
 if __name__ == "__main__":
-    cell_json_path = "test/paddleX 2/IMG_5073_res.json"  # From cell detection
-    ocr_json_path = "output/paddle-ocr-detection/processed/res_0.json"  # From PP-StructureV2
-    image_path = "./inputs/IMG_5073.png"  # Original image
+    # Sørg for at stierne er korrekte for din test
+    # Eksempel stier - du skal muligvis justere disse
+    # cell_json_path = "output/cell detection/processed_IMG_5073_res.json"
+    # ocr_json_path = "output/ai-model/processed_IMG_5073/res_0.json" 
+    # image_path = "input_images/IMG_5073.png" # Antager en input_images mappe
+
+    # For at teste med specifikke filer fra tidligere diskussion:
+    cell_json_path = "output/cell detection/processed_Image_brightness_1_res.json"
+    ocr_json_path = "output/ai-model/processed_Image_brightness_1/res_0.json"
+    image_path = "output/preprocessed/processed_Image_brightness_1.1.png" # Det forbehandlede billede
     
-    merged_data = process_document(
-        cell_json_path=cell_json_path,
-        ocr_json_path=ocr_json_path,
-        output_dir="combined_results",
-        image_path=image_path,
-        overlap_threshold=0.5,  # Lower threshold to catch more text
-        min_overlap_for_spanning=0.1  # Low threshold to identify spanning text
-    )
+    # Tjek om input-filerne eksisterer før kørsel
+    if not os.path.exists(cell_json_path):
+        print(f"FEJL: Cell JSON-fil ikke fundet: {cell_json_path}")
+    elif not os.path.exists(ocr_json_path):
+        print(f"FEJL: OCR JSON-fil ikke fundet: {ocr_json_path}")
+    elif not os.path.exists(image_path):
+        print(f"FEJL: Billedfil ikke fundet: {image_path}")
+    else:
+        merged_data_result = process_document( # Ændret variabelnavn
+            cell_json_path=cell_json_path,
+            ocr_json_path=ocr_json_path,
+            output_dir="output/merge_and_split_results", # Opdateret output dir for test
+            image_path=image_path,
+            overlap_threshold=0.4,  # Justeret threshold for test
+            min_overlap_for_spanning=0.05 # Justeret threshold for test
+        )
+        if merged_data_result:
+            print("\nSuccessfully processed document:")
+            # print(json.dumps(merged_data_result, indent=2, ensure_ascii=False)) # Udskriv hele resultatet
+        else:
+            print("\nFailed to process document.")
