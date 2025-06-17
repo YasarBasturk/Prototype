@@ -883,4 +883,29 @@ header {
     max-width: 100% !important;
     padding: 0 !important;
     margin: 0 !important;
+}
+
+/* New styles for the results grid */
+#textResults {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr); /* Default to 3 columns */
+    gap: 1.5rem; /* Spacing between cards */
+}
+
+#textResults > .col {
+    width: 100% !important; /* Override Bootstrap's width to allow grid to manage it */
+    flex: none !important; /* Override Bootstrap flex properties */
+}
+
+/* Responsive adjustments */
+@media (max-width: 992px) { /* For tablets and smaller laptops */
+    #textResults {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) { /* For mobile phones */
+    #textResults {
+        grid-template-columns: 1fr;
+    }
 } 

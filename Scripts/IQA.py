@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 
 class ImageQualityAssessor:
     def __init__(self, min_resolution=(640, 480),
-                 blur_threshold=50,
-                 brightness_range=(0.2, 0.9),
+                 blur_threshold=40,
+                 brightness_range=(0.2, 1.1),
                  ocr_languages=['en'], # Language(s) for EasyOCR
                  ocr_min_confidence=0.6): # Minimum average confidence to pass
 

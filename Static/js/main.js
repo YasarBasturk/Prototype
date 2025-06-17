@@ -52,30 +52,20 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     function updateVisibleTextItems() {
-        const threshold = thresholdSlider.value / 100;
-        const textItems = document.querySelectorAll('.text-item');
-        let visibleItems = 0;
-        
+        const threshold = parseInt(thresholdSlider.value, 10);
+        const textItems = document.querySelectorAll('#textResults .card.text-item'); // Target cards directly
+
         textItems.forEach(item => {
             const confidenceSpan = item.querySelector('.badge');
-            const confidence = parseInt(confidenceSpan.textContent) / 100;
-            
-            if (confidence < threshold) {
-                item.closest('.col-md-4').style.display = 'block';
-                visibleItems++;
-            } else {
-                item.closest('.col-md-4').style.display = 'none';
-            }
-        });
-        
-        // Add a class to the container to use CSS grid instead of Bootstrap when filtering
-        const containers = document.querySelectorAll('.row');
-        containers.forEach(container => {
-            if (container.querySelector('.text-item')) {
-                if (visibleItems < textItems.length) {
-                    container.classList.add('filtered-grid');
+            // Ensure the span and its text exist before parsing
+            if (confidenceSpan && confidenceSpan.textContent) {
+                const confidence = parseInt(confidenceSpan.textContent, 10); // Parse as integer
+                
+                // Show if confidence is LESS THAN the threshold
+                if (confidence < threshold) {
+                    item.style.display = 'block';
                 } else {
-                    container.classList.remove('filtered-grid');
+                    item.style.display = 'none';
                 }
             }
         });
@@ -171,71 +161,66 @@ function displayJsonData(data) {
     
     // Display cells with text
     const cellsWithText = data.cells_with_text.map(cell => `
-        <div class="col-md-4 mb-3">
-            <div class="card h-100 text-item" data-type="cell" data-id="${cell.cell_id}">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <span>Cell #${cell.cell_id}</span>
-                    <span class="badge ${getConfidenceBadgeClass(cell.confidence)}">
-                        ${Math.round(cell.confidence * 100)}%
-                    </span>
+        <div class="card h-100 text-item" data-type="cell" data-id="${cell.cell_id}">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Cell #${cell.cell_id}</span>
+                <span class="badge ${getConfidenceBadgeClass(cell.confidence)}">
+                    ${Math.round(cell.confidence * 100)}%
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="text-content" id="cell-${cell.cell_id}" data-original-text="${cell.text}">
+                    ${cell.text}
                 </div>
-                <div class="card-body">
-                    <div class="text-content" id="cell-${cell.cell_id}" data-original-text="${cell.text}">
-                        ${cell.text}
-                    </div>
-                    ${cell.component_texts ? '' : ''}
-                </div>
-                <div class="card-footer">
-                    <button class="btn btn-sm btn-outline-primary btn-edit">Edit</button>
-                    <button class="btn btn-sm btn-outline-secondary btn-revert d-none">Revert</button>
-                </div>
+                ${cell.component_texts ? '' : ''}
+            </div>
+            <div class="card-footer">
+                <button class="btn btn-sm btn-outline-primary btn-edit">Edit</button>
+                <button class="btn btn-sm btn-outline-secondary btn-revert d-none">Revert</button>
             </div>
         </div>
     `).join('');
     
     // Display unassigned text
     const unassignedText = data.unassigned_text.map(text => `
-        <div class="col-md-6 mb-3">
-            <div class="card h-100 text-item" data-type="text" data-id="${text.text_id}">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <span>Text #${text.text_id}</span>
-                    <span class="badge ${getConfidenceBadgeClass(text.confidence)}">
-                        ${Math.round(text.confidence * 100)}%
-                    </span>
+        <div class="card h-100 text-item" data-type="text" data-id="${text.text_id}">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Text #${text.text_id}</span>
+                <span class="badge ${getConfidenceBadgeClass(text.confidence)}">
+                    ${Math.round(text.confidence * 100)}%
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="text-content" id="text-${text.text_id}" data-original-text="${text.text}">
+                    ${text.text}
                 </div>
-                <div class="card-body">
-                    <div class="text-content" id="text-${text.text_id}" data-original-text="${text.text}">
-                        ${text.text}
-                    </div>
-                </div>
-                <div class="card-footer">
-                    <button class="btn btn-sm btn-outline-primary btn-edit">Edit</button>
-                    <button class="btn btn-sm btn-outline-secondary btn-revert d-none">Revert</button>
-                </div>
+            </div>
+            <div class="card-footer">
+                <button class="btn btn-sm btn-outline-primary btn-edit">Edit</button>
+                <button class="btn btn-sm btn-outline-secondary btn-revert d-none">Revert</button>
             </div>
         </div>
     `).join('');
     
-    // Combine all sections
+    // Combine all sections, placing cells directly into the #textResults grid
     document.getElementById('textResults').innerHTML = `
-        <div class="mb-4">
+        <div class="col-12 mb-4" style="grid-column: 1 / -1;">
             <h4 class="mb-3">Document Statistics</h4>
             <div class="row">
                 ${metadata}
             </div>
         </div>
-        <div class="mb-4">
+        <div class="col-12" style="grid-column: 1 / -1;">
             <h4 class="mb-3">Cells with Text</h4>
-            <div class="row">
-                ${cellsWithText}
-            </div>
         </div>
-        <div class="mb-4">
-            <h4 class="mb-3">Unassigned Text</h4>
-            <div class="row">
-                ${unassignedText}
+        ${cellsWithText}
+        
+        ${unassignedText.length > 0 ? `
+            <div class="col-12 mt-4" style="grid-column: 1 / -1;">
+                <h4 class="mb-3">Unassigned Text</h4>
             </div>
-        </div>
+            ${unassignedText}
+        ` : ''}
     `;
     
     // Add event listeners to edit buttons

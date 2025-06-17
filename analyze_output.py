@@ -22,33 +22,47 @@ def load_json_file(file_path):
 
 # extract_all_text, calculate_cer, calculate_wer fjernet
 
-def calculate_mean_confidence(data, data_source_name="Data"):
-    """Beregner den gennemsnitlige konfidensscore fra 'cells_with_text' og 'unassigned_text'."""
-    print(f"\n--- Gennemsnitlig Konfidensscore ({data_source_name}) ---")
-    total_confidence = 0.0
-    num_confident_items = 0
-    mean_confidence = "N/A"
+def analyze_detailed_confidence(data, data_source_name="Data"):
+    """
+    Beregner og udskriver gennemsnitlige konfidensscorer for tekstgenkendelse og celledetektion.
+    """
+    print(f"\n--- Detaljeret Konfidensanalyse for: {data_source_name} ---")
 
-    if isinstance(data, dict):
-        for cell in data.get("cells_with_text", []):
-            if isinstance(cell, dict) and isinstance(cell.get("confidence"), (int, float)):
-                total_confidence += cell["confidence"]
-                num_confident_items += 1
-        
-        for item in data.get("unassigned_text", []):
-            if isinstance(item, dict) and isinstance(item.get("confidence"), (int, float)):
-                total_confidence += item["confidence"]
-                num_confident_items += 1
+    text_confidences = []
+    cell_scores = []
 
-        if num_confident_items > 0:
-            mean_confidence = total_confidence / num_confident_items
-            print(f"Gennemsnitlig konfidensscore: {mean_confidence:.4f} (baseret på {num_confident_items} elementer)")
-        else:
-            print(f"Ingen elementer med konfidensscore fundet i {data_source_name}.")
-    else:
-        print(f"{data_source_name} er ikke en dictionary, kan ikke beregne konfidens.")
+    if not isinstance(data, dict):
+        print(f"Advarsel: {data_source_name} data er ikke en dictionary. Kan ikke analysere konfidens.")
+        return
+
+    # Uddrag tekstkonfidenser og cellescores fra 'cells_with_text'
+    for cell in data.get("cells_with_text", []):
+        if isinstance(cell, dict):
+            if isinstance(cell.get("cell_score"), (int, float)):
+                cell_scores.append(cell["cell_score"])
+            
+            for component in cell.get("component_texts", []):
+                if isinstance(component, dict) and isinstance(component.get("confidence"), (int, float)):
+                    text_confidences.append(component["confidence"])
+
+    # Uddrag cellescores fra 'empty_cells'
+    for cell in data.get("empty_cells", []):
+        if isinstance(cell, dict) and isinstance(cell.get("cell_score"), (int, float)):
+            cell_scores.append(cell["cell_score"])
     
-    return mean_confidence
+    # Beregn og udskriv resultater for Tekstgenkendelse
+    if text_confidences:
+        avg_text_confidence = sum(text_confidences) / len(text_confidences)
+        print(f"Gennemsnitlig Tekstgenkendelses-konfidens: {avg_text_confidence:.4f} (fra {len(text_confidences)} tekst-elementer)")
+    else:
+        print("Ingen tekst-elementer med konfidensscore fundet.")
+
+    # Beregn og udskriv resultater for Celledetektion
+    if cell_scores:
+        avg_cell_score = sum(cell_scores) / len(cell_scores)
+        print(f"Gennemsnitlig Celledetektions-score: {avg_cell_score:.4f} (fra {len(cell_scores)} celler)")
+    else:
+        print("Ingen celler med score fundet.")
 
 def analyze_pipeline_output(output_json_path, ground_truth_json_path):
     """
@@ -114,9 +128,9 @@ def analyze_pipeline_output(output_json_path, ground_truth_json_path):
         print(f"  Advarsel: Ground truth data fra {ground_truth_json_path} er ikke en dictionary.")
         num_gt_cells_from_metadata = "N/A (GT data ikke et objekt)"
 
-    # 3. Gennemsnitlig Konfidensscore
-    _ = calculate_mean_confidence(output_data, "Output Pipeline")
-    _ = calculate_mean_confidence(gt_data, "Ground Truth")
+    # 3. Detaljeret Konfidensanalyse
+    analyze_detailed_confidence(output_data, "Output Pipeline")
+    analyze_detailed_confidence(gt_data, "Ground Truth")
     
     # Den returnerede værdi fra calculate_mean_confidence gemmes ikke i `results` 
     # da vi ikke har en opsummering mere, men kunne gøres hvis det ønskes.
@@ -125,8 +139,8 @@ def analyze_pipeline_output(output_json_path, ground_truth_json_path):
 
 def main():
     # Hardkodede stier - rediger disse efter behov
-    pipeline_output_json_file = "output/merge and split/processed_vertical_100_res_combined_with_spanning.json" 
-    ground_truth_json_file = "output/merge and split/processed_IMG_5059_res_combined_with_spanning.json"
+    pipeline_output_json_file = "output/merge and split/IMG_5073_ingen_preprocess.json" 
+    ground_truth_json_file = "output/merge and split/processed_IMG_5073_res_combined_with_spanning.json"
 
     print(f"Bruger output JSON: {pipeline_output_json_file}")
     print(f"Bruger ground truth JSON: {ground_truth_json_file}")
